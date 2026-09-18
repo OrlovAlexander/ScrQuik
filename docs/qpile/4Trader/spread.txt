@@ -1,0 +1,16 @@
+Автор:  Михаил Булычев
+
+Что делает:
+      Портфель отображает спрэды между фьючерсными контрактами и базовым активом
+
+Как использовать:
+
+     строки вида:
+
+	tmp=set_value(tmp, "base_class_code", "EQBR")
+	tmp=set_value(tmp, "base_sec_code", "EESR")
+	tmp=set_value(tmp, "class_code", "SPBFUT")
+	tmp=set_value(tmp, "sec_code", "ESU5")
+	coll=INSERT_COLLECTION_ITEM(coll,0,tmp)
+
+      задают соответсвие фьючерсных контрактов и базового актива.      

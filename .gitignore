@@ -1,0 +1,39 @@
+# Third-party clone — keep local, do not publish
+srcGitHub/
+
+# IDE / user-specific
+.idea/
+*.user
+*.suo
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# .NET build output
+bin/
+obj/
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Generated research caches
+One2One_121/tools/cache_*.json
+One2One_121/tools/move_stats_*.json
+
+# Vendor QUIK manuals (PDFs and extracted text)
+docs/*.pdf
+docs/lua/
+docs/_extracted/
+docs/_extracted_index.txt
+docs/_pdf_analysis.txt
+
+# Unrelated local notes / Word lock files
+verb_sentences/
+~$*

@@ -1,0 +1,79 @@
+PORTFOLIO_EX monitor;
+DESCRIPTION monitor;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRM_ID;
+
+PROGRAM
+'Автор:  Михаил Булычев
+'Что делает:
+'  портфель предназначен для построения произвольных пользовательских оповещений 
+'Как использовать:
+'  В комплекте идёт doc-файл (или pdf) Там всё со скриншотами написано
+
+func format_date(mDateTime)
+  result=0
+  tYear = 0+get_value(mDateTime, "YEAR")
+  tMonth = 0+get_value(mDateTime, "MONTH")
+  tDay = 0+get_value(mDateTime, "DAY")
+  if tMonth < 10
+    tMonth = "0" & tMonth
+  end if
+  if tDay < 10
+    tDay = "0" & tDay
+  end if
+  result = tYear & tMonth & tDay
+end func
+
+func format_last_candle_time(mDateTime, interval, hour_shift)
+  result=0
+  tHour=0+get_value(mDateTime, "HOUR") + hour_shift
+  tMin=floor((0 + get_value(mDateTime, "MIN")) / interval) * interval
+  if tHour < 10
+    tHour = "0" & tHour
+  end if
+  if tMin < 10
+    tMin = "0" & tMin
+  end if
+ result=tHour & tMin & "00"  
+end func
+ 
+  string = create_map()
+  new_global("last_line", 1)  'номер последней строчки с сообщением
+  new_global("last_RSI_value", 0)  'номер последней строчки с сообщением
+  Interval_value=5 'интервал индикатора (пять минут)
+  Hour_shift=-3 '
+  RSI_file="c:\rsi.rsi"
+  
+  
+  
+  mDatetime=GET_DATETIME()
+  candle_data=format_date(mDateTime)
+  candle_time=format_last_candle_time(mDateTime, Interval_value, hour_shift)
+    
+  RSI_Value =0+ get_value(GET_CANDLE("EQBR", "EESR", "", "" & Interval_Value, "RSI", candle_data, candle_time), "close")
+  
+  Message ("RSI_Value=" & RSI_Value & " Last_RSI_Value="& LAst_RSI_VAlue, 2)
+  
+  if(Last_RSI_value <= 45 AND RSI_value >= 45)
+    writeln(RSI_file, "RSI greate then 48")
+    string=set_value(string, "MSg", get_value(mDateTime, "Datetime") & " RSI greater then 48")
+    add_item(1, string)
+    last_line=last_line+1
+  end if   
+  
+  if(Last_RSI_value >= 43 AND RSI_value <= 43)
+    writeln(RSI_file, "RSI smaller then 46")
+    string=set_value(string, "MSg", get_value(mDateTime, "Datetime") & " RSI smaller then 46")
+    add_item(1, string)
+    last_line=last_line+1
+  end if   
+  Last_RSI_Value = RSI_Value
+END_PROGRAM
+
+PARAMETER Msg;
+PARAMETER_TITLE Last msg;
+PARAMETER_DESCRIPTION Last msg;
+PARAMETER_TYPE STRING(1024);
+END
+
+END_PORTFOLIO_EX

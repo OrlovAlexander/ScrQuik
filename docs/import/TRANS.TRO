@@ -1,0 +1,5 @@
+TRANS_ID=1;STATUS=0;TRANS_DESCRIPTION="Ввод заявки"; DESCRIPTION="Отправлена транзакция";
+TRANS_ID=2;STATUS=0;TRANS_DESCRIPTION="Ввод заявки"; DESCRIPTION="Отправлена транзакция";
+TRANS_ID=3;STATUS=0;TRANS_DESCRIPTION="Ввод заявки"; DESCRIPTION="Отправлена транзакция";
+TRANS_ID=4;STATUS=0;TRANS_DESCRIPTION="Ввод заявки"; DESCRIPTION="Отправлена транзакция";
+TRANS_ID=8;STATUS=0;TRANS_DESCRIPTION="Ввод заявки"; DESCRIPTION="Отправлена транзакция";

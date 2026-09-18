@@ -1,0 +1,60 @@
+PORTFOLIO_EX client_value;
+DESCRIPTION клиентский объём;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRMID;
+
+PROGRAM
+client_list="xxx,yyy,zzz"
+
+new_global("result_set", "")
+new_global("last_trade", 1)
+trade=create_map()
+string=create_map()
+
+delete_all_items()
+
+for i from last_trade to get_number_of("TRADES")
+  trade=get_item("TRADES", i)
+  for client in client_list
+    if( client == get_value(trade, "CLIENTCODE" )
+      'нашли сделку с кодом из списка
+      value=0 + get_value(result_set, "code_" & client)
+      value=value + (0+get_value(trade, "VALUE"))
+      result_set=set_value(result_set, "code_" & client, value)
+      break
+    end if
+  end for
+end for
+last_trade=get_number_of("TRADES")+1
+j=1
+
+total_value=0
+
+for client in client_list
+  string=set_value(string, "Value",0 + get_value(result_set, "code_" & client))
+  string=set_value(string, "ClientCode",client)
+  total_value=total_value+(0 + get_value(result_set, "code_" & client))
+  add_item(j, string)
+  
+  j=j+1
+end for
+string=set_value(string, "Value",total_value)
+string=set_value(string, "ClientCode"," ИТОГО ")
+add_item(j, string)
+SET_ROW_COLOR_EX (j, "RGB(170, 220, 170)", "DEFAULT_COLOR", "DEFAULT_COLOR", "DEFAULT_COLOR")
+
+END_PROGRAM
+
+PARAMETER ClientCode;
+PARAMETER_TITLE Код клиента;
+PARAMETER_DESCRIPTION Код клиента;
+PARAMETER_TYPE STRING(32);
+END
+
+PARAMETER Value;
+PARAMETER_TITLE Оборот;
+PARAMETER_DESCRIPTION Оборот;
+PARAMETER_TYPE NUMERIC(12,2);
+END
+
+END_PORTFOLIO_EX

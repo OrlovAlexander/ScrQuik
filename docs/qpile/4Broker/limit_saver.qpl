@@ -1,0 +1,145 @@
+PORTFOLIO_EX LIMIT_SAVER;
+DESCRIPTION Сохранение лимитов;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRM_ID;
+
+PROGRAM
+'Автор:  Михаил Булычев
+'Что делает:
+'  портфель один раз в день в указанное время сохраняет все денежные и бумажные 
+'  лимиты в файл, который потом можно загрузить из клиентского терминала
+'Как использовать:
+'  Следует сделать следующие настройки в коде портфеля
+'  rest_tags="EQTS,EQTA" 'теги расчётов, по которым плечо всегда равно -1 
+'  firmid="MC00XXX00000" 'код фирмы
+'  start_time="18:50:00" 'начало времени сохранения лимитов (локальное системное время)
+'  out_file_path="c:\"   'путь к файлу с сохранёнными лимитами
+'  decimal_symbol=","    'разделитель дробной части в региональных установках
+
+FUNC is_in_list(list, pattern)
+  result = 0
+  if( (0 + find(list, 0, pattern)) == -1)
+    result = 0
+  else
+    result = 1
+  end if
+END FUNC
+
+func str2timevalue(str)
+  result=0+((0+substr("" &str,0,2))*3600)+((0+substr("" & str,3,2))*60)+((0+substr(""&str,6,2)))
+end func
+
+func sys2timevalue(map)
+  result=0+ get_value(map,"hour")*3600 + get_value(map, "min")*60 + get_value(map, "sec")
+end func
+
+func replace_decimal_symbol(string, dchar)
+  temp_str=""
+  char =""
+  len=0 + len(string)
+  for x from 0 to len-1
+    char=substr(string, x, 1)
+    if(char == "." OR char==",")
+      temp_str=temp_str & dchar
+    else
+      temp_str=temp_str & char
+    end if
+  end for
+  result = temp_str
+  'Message("str1="& string & ", str2=" & result, 2)
+end func
+
+  mpMessage=create_map()
+  mpLimit=create_map()
+  new_global("line_number", 1)
+  new_global("done", 0)
+  new_global("last_line", 1)
+  sys_time=get_datetime()
+  out_str=""
+
+  
+  rest_tags="EQTS,EQTA" 'теги расчётов, по которым плечо всегда равно -1 
+  firmid="MC00XXX00000" 'код фирмы
+  start_time="18:50:00" 'начало времени сохранения лимитов (локальное системное время)
+  out_file_path="c:\"   'путь к файлу с сохранёнными лимитами
+  decimal_symbol=","    'разделитель дробной части в региональных установках
+  
+  
+  if(str2timevalue(start_time) <= sys2timevalue(sys_time) and done==0)
+    out_str=set_value(out_str, "message", "started at " & get_value(sys_time, "DATETIME"))
+    'Message(out_str, 2)
+    add_item(last_line, out_str)
+    last_line=last_line + 1
+    out_file_name=out_file_path & get_value(sys_time, "YEAR") & "_" & get_value(sys_time, "MONTH") & "_" & get_value(sys_time, "DAY") & ".lim"
+    clear_file(out_file_name) 
+    n=get_number_of("money_limits")
+
+    for j from 1 to n
+      mpLimit = get_item("money_limits", j)
+      client_code=get_value(mpLimit, "CLIENT_CODE")
+      tag=get_value(mpLimit, "TAG")
+      curr_code=get_value(mpLimit, "CURRCODE")
+      open_balance=replace_decimal_symbol("" & get_value(mpLimit, "CURRENT_BALANCE"), decimal_symbol)
+      open_limit=replace_decimal_symbol("" & get_value(mpLimit, "CURRENT_LIMIT"), decimal_symbol)
+      if( is_in_list(rest_tags, tag) == 1)
+        leverage= -1
+      else
+        leverage=0 + get_value(GET_CLIENT_MARGINAL_PORTFOLIO_INFO(firmid, client_code), "LEVERAGE")
+        if leverage == 0
+          leverage = -1
+        end if
+        leverage = replace_decimal_symbol("" & apply_scale(leverage, 2), decimal_symbol)
+        
+      end if
+      Writeln(out_file_name,  "MONEY:  FIRM_ID = " & firmid & _
+                              "; TAG = " & tag & _
+                              "; CURR_CODE = " & curr_code & _
+                              "; CLIENT_CODE = " & client_code & _
+                              "; OPEN_BALANCE = " & open_balance & _
+                              "; OPEN_LIMIT = " & open_limit & _
+                              "; LEVERAGE = " & leverage & ";")
+    end for
+
+    n2=get_number_of("depo_limits")
+
+    for j2 from 1 to n2
+      dpLimit = get_item("depo_limits", j2)
+      client_code=get_value(dpLimit, "CLIENT_CODE")
+      
+      trdacc=get_value(dpLimit, "TRDACCID")
+      sec_code=get_value(dpLimit, "SECCODE")
+      open_balance=get_value(dpLimit, "CURRENT_BALANCE")
+      open_limit=get_value(dpLimit, "CURRENT_LIMIT")
+     
+	
+      Writeln(out_file_name,  "DEPO:  FIRM_ID = " & firmid & _
+                              "; SECCODE = " & sec_code & _
+                              "; CLIENT_CODE = " & client_code & _
+                              "; OPEN_BALANCE = " & open_balance & _
+                              "; OPEN_LIMIT = " & open_limit & _ 
+			      "; TRDACCID = " & trdacc & ";")
+    end for
+
+
+    n=n+n2
+    sys_time=get_datetime()
+    out_str=set_value(out_str, "message", "finished at " & get_value(sys_time, "DATETIME") & _
+                                " Saved " & n & " limits")
+    add_item(last_line, out_str)
+    'Message(out_str, 2)
+    last_line=last_line+1
+    DONE =1
+  end if
+  
+  if(str2timevalue(start_time) > sys2timevalue(sys_time) and done==1)
+    done = 0
+  end if
+end_program
+
+PARAMETER MESSAGE;
+PARAMETER_TITLE MESSAGE;
+PARAMETER_DESCRIPTION MESSAGE;
+PARAMETER_TYPE STRING(1024);
+END
+
+END_PORTFOLIO_EX

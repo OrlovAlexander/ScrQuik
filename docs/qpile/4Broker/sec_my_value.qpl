@@ -1,0 +1,170 @@
+PORTFOLIO_EX SEC_MY_VALUE;
+DESCRIPTION Собственные объемы;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRMID;
+
+PROGRAM
+
+    ' Программа подсчитывает суммарный объем по инструменту
+    ' и вычисляет собственный объем по этому же инструменту.
+    ' Плюс данная программа показывает отношение собственного
+    ' объема к общему в процентах.
+
+    func set_initial_sec_list_from_class(ccode)
+        ssecs = get_class_securities(ccode)
+        for ssec in ssecs
+            secs = set_value(secs, num_secs & "c", ccode)
+            secs = set_value(secs, num_secs & "cn", get_value(get_class_info(ccode), "name"))
+            secs = set_value(secs, num_secs & "s", ssec)
+            secs = set_value(secs, num_secs & "sn", get_value(get_security_info(ccode, ssec), "short_name"))
+            secs = set_value(secs, num_secs & "at", "0")
+            secs = set_value(secs, num_secs & "t", "0")
+            sec_to_index = set_value(sec_to_index, ccode & ssec, num_secs)
+            num_secs = num_secs + 1
+        end for
+    end func
+
+    func set_initial_for_all_classes()
+        'classes = get_classes_list()
+        classes = "EQBR"
+        for cclass in classes
+            if 0 + get_value(g_classes, cclass) == 1 then
+                continue
+            end if
+            g_classes = set_value(g_classes, cclass, 1)
+            set_initial_sec_list_from_class(cclass)
+        end for
+    end func
+
+    ' Функция выводит информацию (строку)
+    func my_set_item(ii, is_new)
+        a = get_value(secs, ii & "at")
+        b = get_value(secs, ii & "t")
+
+        ' Подсчитываем процент отношения собственного объема к общему
+        if (0 + a) == 0 then
+            c = 0
+        else
+            c = 100 * b / a
+        end if
+
+        str = ""
+        str = set_value(str, "class", get_value(secs, ii & "cn"))
+        str = set_value(str, "sec", get_value(secs, ii & "sn"))
+        str = set_value(str, "value", a)
+        str = set_value(str, "my_value", b)
+        str = set_value(str, "proc", c)
+        if is_new == 1 then
+            add_item(ii + 1, str)
+        else
+            modify_item(ii + 1, str)
+        end if
+        if c > 0 then
+            set_row_color_ex(ii + 1, "DEFAULT_COLOR", "RGB(0,0,255)", "RGB(0,0,255)", "DEFAULT_COLOR")
+        end if
+    end func
+
+    ' Определяем глобальные переменные
+    new_global("g_classes", "")      ' Список обработанных классов
+    new_global("secs", "")           ' Массив структур (бумаг)
+    new_global("tnumbers", "")       ' Массив номеров сделок (для исключения встречных, чтобы их не учитывать дважды)
+    new_global("sec_to_index", "")   ' Массив индексов для бумаг (код класса + код бумаги)
+    new_global("prev_num_secs", 0)   ' Количество бумаг на предыдущих шагах
+    new_global("num_secs", 0)        ' Количество бумаг
+    new_global("prev_num_at", 0)     ' Количество обработанных "всех сделок" на предыдущих шагах
+    new_global("prev_num_t", 0)      ' Количество обработанных "сделок" на предыдущих шагах
+
+    set_initial_for_all_classes()
+
+    changed_indexes = ""   ' Массив индексов бумаг, по которым изменились данные
+
+    ' Обрабатываем "все сделки" (только новые)
+    num = get_number_of("all_trades")
+    all_trade = ""
+    for i from prev_num_at + 1 to num
+        all_trade = get_item("all_trades", i)
+        seccode = get_value(all_trade, "seccode")
+        classcode = get_value(all_trade, "classcode")
+
+        index = get_value(sec_to_index, classcode & seccode) ' Получаем индекс бумаги по кодам класса и бумаги
+
+        changed_indexes = changed_indexes & index & "," ' Заносим данный индекс в массив изменений
+
+        ' Пересчитываем суммарный объем по данному инструменту
+        prev = 0 + get_value(secs, index & "at")
+        prev = prev + get_value(all_trade, "value")
+        secs = set_value(secs, index & "at", prev)
+
+    end for
+    prev_num_at = num
+
+    ' Обрабатываем "сделки" (только новые)
+    num = get_number_of("trades")
+    trade = ""
+    for i from prev_num_t + 1 to num
+        trade = get_item("trades", i)
+        seccode = get_value(trade, "seccode")
+        classcode = get_value(trade, "classcode")
+
+        ' Не обрабатываем повторные сделки
+        if 0 + get_value(tnumbers, get_value(trade, "number")) == 1 then
+            continue
+        end if
+        tnumbers = set_value(tnumbers, get_value(trade, "number"), 1) ' Заносим номер сделки, чтобы не обрабатывать повторную, если такая есть
+
+        index = get_value(sec_to_index, classcode & seccode) ' Получаем индекс бумаги по кодам класса и бумаги
+
+        changed_indexes = changed_indexes & index & "," ' Заносим данный индекс в массив изменений
+
+        ' Пересчитываем свой объем по данному инструменту
+        prev = 0 + get_value(secs, index & "t")
+        prev = prev + get_value(trade, "value")
+        secs = set_value(secs, index & "t", prev)
+
+    end for
+    prev_num_t = num
+
+    ' Отображаем информацию
+    for j from prev_num_secs to num_secs - 1
+        my_set_item(j, 1)
+    end for
+
+    for j in changed_indexes
+        my_set_item(j, 0)
+    end for
+
+    prev_num_secs = num_secs
+
+END_PROGRAM
+
+PARAMETER class;
+PARAMETER_TITLE Класс;
+PARAMETER_DESCRIPTION Класс;
+PARAMETER_TYPE STRING(64);
+END
+
+PARAMETER sec;
+PARAMETER_TITLE Бумага;
+PARAMETER_DESCRIPTION Бумага;
+PARAMETER_TYPE STRING(64);
+END
+
+PARAMETER value;
+PARAMETER_TITLE Объем;
+PARAMETER_DESCRIPTION Объем;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+PARAMETER my_value;
+PARAMETER_TITLE Мой объем;
+PARAMETER_DESCRIPTION Мой объем;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+PARAMETER proc;
+PARAMETER_TITLE Процент;
+PARAMETER_DESCRIPTION Процент;
+PARAMETER_TYPE NUMERIC(10,4);
+END
+
+END_PORTFOLIO_EX

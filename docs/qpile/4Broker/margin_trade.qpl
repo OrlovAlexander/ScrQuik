@@ -1,0 +1,54 @@
+PORTFOLIO_EX Margin_trade;
+DESCRIPTION уровень маржи по сделкам;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRMID;
+PROGRAM
+	'В этом месте пишем список клиентов, которых мы хотим отслеживать
+	client_list = "xxx,yyy,zzz"
+	firm_id="firm_id"
+        filename="margin_level.txt"
+
+
+	new_global("curr_line", 1)
+	new_global("last_trade",0)
+	client_info = create_map()
+	str=create_map()
+	for i from last_trade + 1 to ( 0 + get_number_of("trades"))
+		trade=get_item("trades", i)
+		for client_code in client_list
+			if get_value(trade, "CLIENTCODE") == client_code then
+			  client_info = get_client_marginal_portfolio_info (firm_id, client_code)
+			  writeln(filename, "" & get_value(trade, "number") & " " & client_code &  " " & get_value(client_info, "margin"))
+			  str=set_value(str, "client_code", client_code)
+			  str=set_value(str, "trade_num", get_value(trade, "number"))
+			  str=set_value(str, "margin_level", get_value(client_info, "margin"))
+			  add_item(curr_line, str)
+			  curr_line=curr_line+1
+			  break
+			end if
+		end for
+	end for
+	last_trade=get_number_of("trades")
+
+END_PROGRAM
+
+PARAMETER client_code;
+PARAMETER_TITLE код клиента;
+PARAMETER_DESCRIPTION код клиента;
+PARAMETER_TYPE STRING(64);
+END
+
+PARAMETER trade_num;
+PARAMETER_TITLE номер сделки;
+PARAMETER_DESCRIPTION номер сделки;
+PARAMETER_TYPE STRING(64);
+END
+
+PARAMETER margin_level;
+PARAMETER_TITLE уровень маржи;
+PARAMETER_DESCRIPTION уровень маржи;
+PARAMETER_TYPE STRING(64);
+END
+
+
+END_PORTFOLIO_EX

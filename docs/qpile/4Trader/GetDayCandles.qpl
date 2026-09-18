@@ -1,0 +1,198 @@
+PORTFOLIO_EX GetDayCandles;
+DESCRIPTION Сохранение свечей графиков ряда параметров набора инструментов за текущую торговую сессию (в таблицу и в файл);
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRM_ID;
+
+PROGRAM
+
+ClassCodeList = "SPBFUT"				' коды классов бумаг, по которым будет осуществляться вывод
+SecCodeList = "RIZ7"				' коды бумаг, по которым будет осуществляться вывод
+Params = "bid,offer"				' параметры, по которым будут строиться свечи 
+GraphType = "PRICE" 				' тип графика
+Intervals = "1,5,6,10" 				' интервал графика: 1 - минутный, 5 - 5-минутный и пр.
+Separator = ","						' разделитель дробной части в региональных установках
+OutPath = "c:\"						' путь к директории с файлом свечей
+
+
+NEW_GLOBAL("Counter", 1)			' счетчик записей в массив выходных данных (таблицы)
+NEW_GLOBAL("Date", "0")				' дата текущей торговой сессии QUIK
+NEW_GLOBAL("CommonTime", 48600) 	' 10 часов 30 минут утра по Москве - время начала текущей торговой сессии
+NEW_GLOBAL("OutFile", "")
+
+
+' функция возвращает целую часть частного, полученного в результате деления первого аргумента на второй
+func MOD(dividend, divisor)
+	if(divisor != 0)
+		quotient = dividend / divisor
+		result = FLOOR(quotient)
+	else
+		result = -1
+	end if
+end func
+
+' функция переводит общее количество секунд (значение аргумента) в строку формата "HHMMSS"
+func FromUnixTimeToString(time)
+	hour = MOD(time, 3600) ' получаем количество часов
+	if(LEN(hour) < 2)
+		hour = "0" & hour
+	end if
+	min = MOD((time - (hour * 3600)), 60) ' получаем количество минут
+	if(LEN(min) < 2)
+		min = "0" & min
+	end if
+	sec = time - ((hour * 3600) + (min * 60)) ' получаем количество секунд
+	if(LEN(sec) < 2)
+		sec = "0" & sec
+	end if
+	result = hour & min & sec
+end func
+
+
+if(Date == "0")
+	CurDate = GET_VALUE(GET_TRADE_DATE(), "Date") ' DD.MM.YYYY
+	CurYear = SUBSTR(CurDate, 6, 4)
+	CurMonth = SUBSTR(CurDate, 3, 2)
+	CurDay = SUBSTR(CurDate, 0, 2)
+	Date = CurYear & CurMonth & CurDay	' Преобразовали текущую дату в принятый для вызова GET_CANDLE формат
+
+    OutFile = OutPath & CurYear & "." & CurMonth & "." & CurDay & ".txt" ' Сформировали имя файла данных со свечами
+    CLEAR_FILE(OutFile) 'Очистили файл 
+	WRITELN(OutFile, "Security [Class],ParamName,Interval,Date,Time,Open,High,Low,Close,Volume") ' Вывели заголовок
+	DELETE_ALL_ITEMS()
+	
+	CurIntervals = CREATE_MAP() ' Создаем массив счетчиков интервалов
+	CurIntervals = SET_VALUE(CurIntervals, "1", 1)
+	CurIntervals = SET_VALUE(CurIntervals, "5", 0)
+	CurIntervals = SET_VALUE(CurIntervals, "6", 0)
+	CurIntervals = SET_VALUE(CurIntervals, "10", 0)
+	CurIntervals = SET_VALUE(CurIntervals, "15", 0)
+	CurIntervals = SET_VALUE(CurIntervals, "20", 0)
+	CurIntervals = SET_VALUE(CurIntervals, "30", 0)
+	CurIntervals = SET_VALUE(CurIntervals, "60", 0)
+end if
+
+CurTime = GET_DATETIME()
+CurHour = GET_VALUE(CurTime, "Hour")
+CurMin = GET_VALUE(CurTime, "Min")
+CurSec = GET_VALUE(CurTime, "Sec")
+
+CurTimeInSec = CurHour * 3600 + CurMin * 60 + CurSec ' Преобразовали текущее время в количество секунд
+
+if (CurTimeInSec - CommonTime) >= 60 ' Текущее время более 10.30 (время московское) и с момента последнего опроса данных прошло не менее минуты
+	CandleList = CREATE_MAP()
+	Amount = 0 + MOD((CurTimeInSec - CommonTime), 60)
+	for i from 0 to Amount
+		for Interval in Intervals
+			CurInterval = GET_VALUE(CurIntervals, Interval)
+			if ((0 + CurInterval) == (0 + Interval))
+				if((0 + Interval) != 1)
+					CurTime = FromUnixTimeToString(CommonTime - CurInterval * 60)
+				else
+					CurTime = FromUnixTimeToString(CommonTime)
+				end if
+				for ClassCode in ClassCodeList
+					for SecCode in SecCodeList
+ 						for Param in Params
+							Candle = GET_CANDLE(ClassCode, SecCode, Param, Interval, GraphType, Date, CurTime)
+							Open = 0 + GET_VALUE(Candle, "Open")
+							if(Open != 0.0) ' Если цена открытия интервала равна нулю, свечу не выводим
+								Close = 0 + GET_VALUE(Candle, "Close")
+								High = 0 + GET_VALUE(Candle, "High")
+								Low = 0 + GET_VALUE(Candle, "Low")
+								Volume = 0 + GET_VALUE(Candle, "Volume")
+								CandleList = SET_VALUE(CandleList, "Security", SecCode)
+								CandleList = SET_VALUE(CandleList, "ClassCode", ClassCode)
+								CandleList = SET_VALUE(CandleList, "Param", Param)
+								CandleList = SET_VALUE(CandleList, "Date", Date)
+								CandleList = SET_VALUE(CandleList, "Time", CurTime)
+								CandleList = SET_VALUE(CandleList, "Interval", Interval)
+								CandleList = SET_VALUE(CandleList, "Open", Open)
+								CandleList = SET_VALUE(CandleList, "Close", Close)
+								CandleList = SET_VALUE(CandleList, "High", High)
+								CandleList = SET_VALUE(CandleList, "Low", Low)
+								CandleList = SET_VALUE(CandleList, "Volume", Volume)
+		 						ADD_ITEM(Counter, CandleList)
+      							WRITELN(OutFile, SecCode  & " [" & ClassCode & "]," & Param & "," & Interval & "," & Date  & "," & CurTime & "," & Open & "," & High & "," & Low & "," & Close & "," & Volume)			
+								Counter = Counter + 1
+							end if
+						end for
+					end for
+				end for
+				CurIntervals = SET_VALUE(CurIntervals, Interval, 1) ' скинули интервальный счетчик
+			else
+				CurIntervals = SET_VALUE(CurIntervals, Interval, (CurInterval + 1)) ' накинули интервальный счетчик
+			end if
+		end for
+		CommonTime = CommonTime + 60 ' накинули время
+	end for
+end if
+
+END_PROGRAM
+
+PARAMETER Security;
+PARAMETER_TITLE Код инструмента;
+PARAMETER_DESCRIPTION Код инструмента;
+PARAMETER_TYPE String(12);
+END
+
+PARAMETER ClassCode;
+PARAMETER_TITLE Код класса;
+PARAMETER_DESCRIPTION Код класса;
+PARAMETER_TYPE String(12);
+END
+
+PARAMETER Param;
+PARAMETER_TITLE Параметр;
+PARAMETER_DESCRIPTION Параметр;
+PARAMETER_TYPE String(12);
+END
+
+PARAMETER Date;
+PARAMETER_TITLE Дата;
+PARAMETER_DESCRIPTION Дата интервала;
+PARAMETER_TYPE String(10);
+END
+
+PARAMETER Time;
+PARAMETER_TITLE Время;
+PARAMETER_DESCRIPTION Время интервала;
+PARAMETER_TYPE String(8);
+END
+
+PARAMETER Interval;
+PARAMETER_TITLE Интервал;
+PARAMETER_DESCRIPTION Интервал;
+PARAMETER_TYPE String(2);
+END
+
+PARAMETER Open;
+PARAMETER_TITLE Открытие;
+PARAMETER_DESCRIPTION Цена открытия интервала;
+PARAMETER_TYPE Numeric(20,4);
+END
+
+PARAMETER Close;
+PARAMETER_TITLE Закрытие;
+PARAMETER_DESCRIPTION Цена закрытия интервала;
+PARAMETER_TYPE Numeric(20,4);
+END
+
+PARAMETER High;
+PARAMETER_TITLE Максимум;
+PARAMETER_DESCRIPTION Максимальная цена интервала;
+PARAMETER_TYPE Numeric(20,4);
+END
+
+PARAMETER Low;
+PARAMETER_TITLE Минимум;
+PARAMETER_DESCRIPTION Минимальная цена интервала;
+PARAMETER_TYPE Numeric(20,4);
+END
+
+PARAMETER Volume;
+PARAMETER_TITLE Объем;
+PARAMETER_DESCRIPTION Суммарный объем сделок в интервале;
+PARAMETER_TYPE Numeric(20,4);
+END
+
+END_PORTFOLIO_EX

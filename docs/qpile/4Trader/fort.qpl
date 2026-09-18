@@ -1,0 +1,164 @@
+PORTFOLIO_EX Actives;
+DESCRIPTION Actives;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRM_ID;
+PROGRAM	
+'расчёт ликвидационной стоимости портфеля на срочном рынке	
+
+
+'функция проверки бумаги на принадлежность к классу опционов
+'возвращаемые значения: 1 - если бумага является опционом, 0 - если не является
+'используется предположение, что поле "Страйк" в ТТП не нулевое только для опционов
+func is_option(opt_code)
+	opt_type="" 
+	opt_type=get_param("spbopt", opt_code, "strike")
+	if(opt_type>0)
+		result=1
+	else
+		result=0
+	end if
+end func
+
+'функция проверки уникальности торгового счёта в списке 
+FUNC is_in_list(list, pattern)
+  result = 0
+  if( (0 + find(list, 0, pattern)) == -1)
+    result = 0
+  else
+    result = 1
+  end if
+END FUNC
+
+	AccountList=""
+	FirmId="SPBFUT589000" 'код фирмы, по которой будут браться счета для расчёта.   
+	mMoney=create_map()
+	flim=create_map()
+	fpos=create_map()
+	string=create_map()
+  'возможные параметры для оценки опционной позиции.
+  'по умолчанию используется теоретическая цена опциона
+	param="theorprice"
+  'param="bid"
+  
+  'создаём структуру, в которой будем хранить шаг цены для разных базовых 
+  'активов
+  mMinStep=create_map()
+  mMinStep=set_value(mMinStep, "GDH7", "0.1")
+  mMinStep=set_value(mMinStep, "GDK7", "0.1")
+  mMinStep=set_value(mMinStep, "RIH7", "5")
+  mMinStep=set_value(mMinStep, "RIM7", "5")
+  mMinStep=set_value(mMinStep, "RIU7", "5")
+  mMinStep=set_value(mMinStep, "RIZ7", "5")
+
+  'в этом цикле формируется список уникальных торговых счетов из таблицы фьючерсных лимитов
+  'список потребуется нам потом, для вывода строк в таблицу
+  n=get_number_of("FUTURES_CLIENT_LIMITS")
+   for i from 1 to n
+		mLimit=get_item("FUTURES_CLIENT_LIMITS", i)
+     if(get_value(mLimit, "FIRMID") == FirmID AND get_value(mLimit, "TYPE") == "РУБЛИ")
+       temp_str="," & get_value(mLimit, "TRDACCID") & ","
+       if( is_in_list(AccountList, temp_str) == 0)
+        AccountList = AccountList & get_value(mLimit, "TRDACCID") & ","
+	     end if
+    end if
+  end for
+  
+	'для хранения данных в процессе расчёта используется MAP с полями вида:
+	'TRDACC=MONEY (SPBFUT000001=1000,SPBFUT000002=10000,SPBFUT000003=1004)
+	
+	fut_money=0
+	j=1
+  n=Get_Number_Of("FUTURES_CLIENT_LIMITS")
+  for i from 1 to n
+    flim=Get_Item("FUTURES_CLIENT_LIMITS", i)
+    trdacc=get_value(flim, "TRDACCID")
+    'Учитываем деньги в лимитах только по заданной фирме (что бы не дублировать лимиты для объединённой денежной позиции)
+    'и только рублёвую часть(что бы два раза не суммировать вариационку)
+    'если коэффициент ликвидности не равен 1, то считаться будет не корректно 
+    if(get_value(flim, "FIRMID") == FirmID AND get_value(flim, "TYPE") == "РУБЛИ")
+      mMoney=set_value(mMoney, trdacc, get_value(flim, "CBPLIMIT") + get_value(flim, "VARMARGIN") + get_value(flim, "ACCRUEDINT"))
+      mMoney=set_value(mMoney, "CBPLIMIT_" &trdacc, get_value(flim, "CBPLIMIT"))
+    end if
+	end for
+  
+  n=Get_Number_Of("FUTURES_CLIENT_HOLDINGS")
+  for i from 1 to n
+    fpos=get_Item("FUTURES_CLIENT_HOLDINGS", i)
+    trdacc=get_value(fpos, "TRDACCID")
+    if(get_value(fpos, "FIRMID") == FirmID)
+      if( is_option(get_value(fpos, "SECCODE")) == 1)
+        opt_sec_code=get_value(fpos, "SECCODE")
+        min_step=0 + get_value(mMinStep, get_value(get_param_ex("SPBOPT", opt_sec_code, "optionbase"),"param_image"))
+        if(min_step == 0)
+            min_step = 1
+        end if
+        step_price=0 + get_value(get_param_ex("SPBOPT", opt_sec_code, "steppricet"),"param_image")
+        'объём опционной позиции умножается на значение парметра, который мы определяли выше 
+        fut_money=get_value(fpos, "TOTAL_NET")*(get_param("SPBOPT", get_value(fpos, "SECCODE"), param) / min_step * step_price)
+        mMoney=set_value(mMoney, trdacc, 0 + get_value(mMoney, trdacc) + fut_money)
+      end if
+    end if
+  end for
+  
+  cSortedArray = create_collection()
+  mArrayItem = create_map()
+  
+  for trdacc in AccountList
+    mArrayItem=set_value(mArrayItem, "Account", trdacc)
+    mArrayItem=set_value(mArrayItem, "Volume", get_value(mMoney, trdacc))
+    mArrayItem=set_value(mArrayItem, "CBPLIMIT", get_value(mMoney, "CBPLIMIT_" & trdacc))
+    if((0+ get_value(mArrayItem, "CBPLIMIT")) == 0)
+      mArrayItem=set_value(mArrayItem, "Ratio", 0)
+    else
+      mArrayItem=set_value(mArrayItem, "Ratio", 0 + get_value(mMoney, trdacc)/ get_value(mMoney, "CBPLIMIT_" & trdacc))
+    end if
+    n=get_collection_count(cSortedArray)
+    for i from 0 to n
+      if((0+get_value(mArrayItem, "Ratio")) >= (0+get_value(get_collection_item(cSortedArray, i), "Ratio")))
+        cSortedArray=insert_collection_item(cSortedArray, i, mArrayItem)
+        break
+      end if    
+    end for
+  end for
+  
+  n=get_collection_count(cSortedArray)
+  j=1
+  delete_all_items()
+  for i from 0 to n-1
+    add_item(j, get_collection_item(cSortedArray, i))
+    if((0+get_value(get_collection_item(cSortedArray, i), "ratio")) >= 0.3)
+      SET_ROW_COLOR_EX(j, "RGB(138,255,138)", "DEFAULT_COLOR", "DEFAULT_COLOR", "DEFAULT_COLOR")
+    else
+      SET_ROW_COLOR_EX(j, "RGB(255,138,138)", "DEFAULT_COLOR", "DEFAULT_COLOR", "DEFAULT_COLOR")
+    end if  
+    j=j+1
+  end for
+	
+
+END_PROGRAM
+PARAMETER Account;
+PARAMETER_TITLE Account;
+PARAMETER_DESCRIPTION Account;
+PARAMETER_TYPE STRING(64);
+END
+
+PARAMETER Volume;
+PARAMETER_TITLE Volume;
+PARAMETER_DESCRIPTION Volume;
+PARAMETER_TYPE NUMERIC(12,3);
+END
+
+PARAMETER CBPLIMIT;
+PARAMETER_TITLE Текущие чистые позиции;
+PARAMETER_DESCRIPTION текущие чистые позиции;
+PARAMETER_TYPE NUMERIC(12,3);
+END
+PARAMETER Ratio;
+PARAMETER_TITLE Отношение;
+PARAMETER_DESCRIPTION Отношение;
+PARAMETER_TYPE NUMERIC(12,3);
+END
+
+END_PORTFOLIO_EX
+
+

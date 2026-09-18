@@ -1,0 +1,152 @@
+PORTFOLIO_EX Assets;
+DESCRIPTION Текущие активы;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRMID;
+
+PROGRAM
+
+client_code="xxx"
+firm_id="yyyy"
+
+file="assets_log.txt"
+file_tmp="assets_log.tmp"
+
+marginal_info=GET_CLIENT_MARGINAL_PORTFOLIO_INFO(firm_id,client_code)
+IN_ALL_ASSETS=GET_VALUE (marginal_info, "IN_ALL_ASSETS")
+ALL_ASSETS=GET_VALUE (marginal_info, "ALL_ASSETS")
+ALL_ASSETS=APPLY_SCALE(ALL_ASSETS,2)
+
+cur_date=GET_DATETIME()
+cur_year=get_value(cur_date, "YEAR")
+cur_month=get_value(cur_date, "MONTH")
+cur_day=get_value(cur_date, "DAY")
+
+ FUNC SPLIT(s,from)
+    pos=FIND(s,from+1,",")
+    RESULT=TRIM(SUBSTR(s,from,pos-from))
+ END FUNC
+
+ FUNC MOVE(s,from)
+    RESULT=1+FIND(s,from+1,",")
+ END FUNC
+
+ FUNC ISZERO(d)
+	RESULT=0
+	if ((d<0.00001) and (d>-0.00001))
+		RESULT=1
+	end if
+ END FUNC
+
+ FUNC ISEQUAL(d1,d2)
+	RESULT=ISZERO(0+d1-d2)
+ END FUNC
+
+ FUNC REWRITE(f,f1,lines)
+	CLEAR_FILE(f)
+	for i from 1 to lines
+		s=READ_LINE(f1,i,err)
+		WRITELN(f,s)
+	end for
+ END FUNC
+
+outputline=1
+err=0
+
+
+filelen=GET_FILE_LEN(file)
+if filelen>0 then
+	s=READ_LINE(file,filelen,err)
+	if -1=0+FIND(s,0,",")
+		continue
+	end if
+	from=0
+        pos=FIND(s,1,",")
+        day=TRIM(SUBSTR(s,0,pos))
+	from=MOVE(s,from)
+	month=SPLIT(s,from)
+	from=MOVE(s,from)
+	year=SPLIT(s,from)
+	from=MOVE(s,from)
+	assets=SPLIT(s,from)
+
+	if (day=cur_day) and (month=cur_month) and (year=cur_year)
+		filelen=filelen-1
+	end if
+end if
+
+REWRITE(file_tmp,file,filelen)
+s=cur_day & " , " & cur_month & " , " & cur_year & " , " & ALL_ASSETS & ","
+WRITELN(file_tmp,s)
+REWRITE(file,file_tmp,GET_FILE_LEN(file_tmp))
+
+DELETE_ALL_ITEMS()
+filelen=GET_FILE_LEN(file)
+for i from 1 to filelen
+	s=READ_LINE(file,i,err)
+	if -1=0+FIND(s,0,",")
+		continue
+	end if
+	from=0
+        pos=FIND(s,1,",")
+        day=TRIM(SUBSTR(s,0,pos))
+
+	'day=SPLIT(s,from)
+	from=MOVE(s,from)
+	month=SPLIT(s,from)
+	from=MOVE(s,from)
+	year=SPLIT(s,from)
+	from=MOVE(s,from)
+	assets=SPLIT(s,from)
+
+	profit_loss=0
+	profit_loss_percent=0
+	if (i>1)
+		profit_loss=assets-previous_assets
+		profit_loss_percent=100*profit_loss/previous_assets
+	end if
+	previous_assets=assets
+	output=CREATE_MAP()
+	output=SET_VALUE(output,"Date","" & day & "." & month & "." & year)
+	output=SET_VALUE(output,"Assets",assets)
+	output=SET_VALUE(output,"ProfitLoss",profit_loss)
+	output=SET_VALUE(output,"ProfitLossPercent",profit_loss_percent)
+	ADD_ITEM(outputline,output)
+
+	if ISZERO(profit_loss)=0
+		if (profit_loss>0) 
+			SET_ROW_COLOR_EX (outputline, "RGB(0,255,0)", "RGB(0,128,0)","DEFAULT_COLOR", "DEFAULT_COLOR" )
+		else	
+			SET_ROW_COLOR_EX (outputline, "RGB(255,0,0)", "RGB(128,0,0)","DEFAULT_COLOR", "DEFAULT_COLOR" )
+		end if
+	end if
+
+	outputline=outputline+1
+end for
+END_PROGRAM
+
+PARAMETER Date;
+PARAMETER_TITLE Дата;
+PARAMETER_DESCRIPTION Дата открытия;
+PARAMETER_TYPE STRING(10);
+END
+
+PARAMETER Assets;
+PARAMETER_TITLE Активы;
+PARAMETER_DESCRIPTION Текущие активы;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+PARAMETER ProfitLoss;
+PARAMETER_TITLE P/L р.;
+PARAMETER_DESCRIPTION Прибыль руб.;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+PARAMETER ProfitLossPercent;
+PARAMETER_TITLE P/L %;
+PARAMETER_DESCRIPTION Прибыль %;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+END_PORTFOLIO_EX
+

@@ -1,0 +1,85 @@
+PORTFOLIO_EX TradesRatio;
+DESCRIPTION Объёмы купли/продажи за интервал;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRMID;
+
+PROGRAM
+
+'Автор:  Михаил Булычев
+'Что делает:
+'   подсчитывается объёмы купли\продажи по определённому инструменту за 
+'   заданный интервал   
+'Как использовать:
+'  В следующих строках следует указать код бумаги и код класса для 
+'  отслеживаемого инструмента
+'  SecCode="EESR"
+'  ClassCode="EQBR"
+'  В следующей строке 300 - является интервалом в секундах, а -3 - смещением
+'  часового пояса относительно времени торговой системы. 
+'  if(is_in_interval(300, trade_time, sys_time, -3) == 1)
+
+
+FUNC is_in_interval(interval, trade_time, sys_time, hour_shift)
+  csys_time_value=0
+  c_time_value=0
+  csys_time_value = (0 + get_value(sys_time, "Hour") + hour_shift)*3600 + _
+                    get_value(sys_time, "Min")*60 + _
+                    get_value(sys_time, "Sec")
+  c_time_value=0 + ((0 + substr("" & trade_time, 0, 2)) * 3600) + ((0 + substr("" & trade_time, 2, 2)) * 60) + ((0 + substr("" & trade_time, 4, 2)))
+  if((csys_time_value - c_time_value) <= interval)
+    result=1
+  else
+    result=0
+  end if
+END FUNC
+  buy_value=0
+  sell_value=0
+  total_value=0
+  sys_time = GET_DATETIME()
+  delete_all_items() 
+  mString=create_map()
+  SecCode="EESR"
+  ClassCode="EQBR"
+  j=0
+  n=get_number_of("ALL_TRADES")
+  for i from 0 to n
+    mTrade=get_item("ALL_TRADES", n-i)
+    trade_time=get_value(mTrade, "TIME")
+    if(get_value(mTrade, "SecCode")== SecCode AND get_value(mTrade, "ClassCode")== ClassCode)
+      if(is_in_interval(300, trade_time, sys_time, -3) == 1)
+        value=0+get_value(mTrade, "Value")
+        j=j+1
+        if (get_value(mTrade, "OPERATION") == "BUY")
+          buy_value=buy_value+value    
+        else
+          sell_value=sell_value+value      
+        end if
+        total_value=total_value+value
+      else
+        break
+      end if
+    end if    
+  end for
+  mString=set_value(mString, "vol", total_value)
+  mString=set_value(mString, "volbuy", buy_value)
+  mString=set_value(mString, "volsell", sell_value)
+  add_item(1, mString)
+END_PROGRAM
+
+PARAMETER vol;
+PARAMETER_TITLE vol;
+PARAMETER_DESCRIPTION Купили;
+PARAMETER_TYPE NUMERIC(10,0);
+END
+PARAMETER volbuy;
+PARAMETER_TITLE volbuy;
+PARAMETER_DESCRIPTION Купили;
+PARAMETER_TYPE NUMERIC(10,0);
+END
+PARAMETER volsell;
+PARAMETER_TITLE volsell;
+PARAMETER_DESCRIPTION Продали;
+PARAMETER_TYPE NUMERIC(10,0);
+END
+END_PORTFOLIO_EX
+

@@ -1,0 +1,11 @@
+{
+  "files.encoding": "utf8",
+  "files.autoGuessEncoding": true,
+  "files.candidateGuessEncodings": ["utf8", "windows1251"],
+  "[markdown]": {
+    "files.encoding": "utf8"
+  },
+  "[typescriptreact]": {
+    "files.encoding": "utf8"
+  }
+}

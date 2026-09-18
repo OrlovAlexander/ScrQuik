@@ -1,0 +1,31 @@
+PORTFOLIO_EX Quote_Export;
+DESCRIPTION Ёкспортер;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRMID;
+
+PROGRAM
+quote_file="qoutes.txt"
+class_code_list="EQBR,EQBS,EQNL,EQNE"
+
+new_global("first_start", 1)
+if first_start == 1
+	Clear_File(quote_file)
+	first_start=0
+end if
+
+
+for class_code in class_code_list
+	sec_code_list = get_class_securities(class_code)
+	for sec_code in sec_code_list
+		writeln(quote_file, "" & sec_code & "," & get_param(class_code, sec_code, "bid") & "," & get_param(class_code, sec_code, "offer"))
+	end for
+end for
+
+END_PROGRAM
+
+PARAMETER null;
+PARAMETER_TITLE пусто;
+PARAMETER_DESCRIPTION пусто;
+PARAMETER_TYPE STRING(1);
+END
+

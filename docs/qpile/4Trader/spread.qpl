@@ -1,0 +1,68 @@
+PORTFOLIO_EX Spread;
+DESCRIPTION Spread;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRMID;
+
+PROGRAM
+	coll=Create_Collection()
+	trade=Create_Map()
+	tmp=create_map()
+	str=create_map()
+
+	tmp=set_value(tmp, "base_class_code", "EQBR")
+	tmp=set_value(tmp, "base_sec_code", "EESR")
+	tmp=set_value(tmp, "class_code", "SPBFUT")
+	tmp=set_value(tmp, "sec_code", "ESU5")
+	coll=INSERT_COLLECTION_ITEM(coll,0,tmp)
+
+	tmp=set_value(tmp, "base_class_code", "EQBR")
+	tmp=set_value(tmp, "base_sec_code", "EESR")
+	tmp=set_value(tmp, "class_code", "SPBFUT")
+	tmp=set_value(tmp, "sec_code", "ESM6")
+	coll=INSERT_COLLECTION_ITEM(coll,1,tmp)
+
+	tmp=set_value(tmp, "base_class_code", "EQBR")
+	tmp=set_value(tmp, "base_sec_code", "EESR")
+	tmp=set_value(tmp, "class_code", "SPBFUT")
+	tmp=set_value(tmp, "sec_code", "ESH6")
+	coll=INSERT_COLLECTION_ITEM(coll,2,tmp)
+
+	tmp=set_value(tmp, "base_class_code", "EQBR")
+	tmp=set_value(tmp, "base_sec_code", "EESR")
+	tmp=set_value(tmp, "class_code", "SPBFUT")
+	tmp=set_value(tmp, "sec_code", "ESZ5")
+	coll=INSERT_COLLECTION_ITEM(coll,3,tmp)
+
+
+
+	delete_all_items()
+	FOR i FROM 0 to GET_COLLECTION_COUNT(coll)-1
+		'tmp_map=get_collection_item(coll,i)
+		str=set_value(str, "name", "" & get_value( get_collection_item(coll,i), "sec_code"))
+		str=set_value(str, "base_spread", .0 + get_param( get_value( get_collection_item(coll,i), "base_class_code" ),  get_value( get_collection_item(coll,i), "base_sec_code"), "offer") - get_param( get_value(get_collection_item(coll,i), "base_class_code"), get_value(get_collection_item(coll,i), "base_sec_code"), "bid") )
+		str=set_value(str, "spread", .0 + get_param( get_value(get_collection_item(coll,i), "class_code"), get_value(get_collection_item(coll,i), "sec_code"), "offer") - get_param(get_value(get_collection_item(coll,i), "class_code"), get_value(get_collection_item(coll,i), "sec_code"), "bid"))
+
+		add_item(i+1, str)
+	END FOR
+
+END_PROGRAM
+
+PARAMETER Name;
+PARAMETER_TITLE Бумага/Класс;
+PARAMETER_DESCRIPTION Бумага/Класс;
+PARAMETER_TYPE STRING(32);
+END
+
+PARAMETER Base_Spread;
+PARAMETER_TITLE Спред баз. актива;
+PARAMETER_DESCRIPTION Спред баз. актива;
+PARAMETER_TYPE NUMERIC(10,4);
+END
+
+PARAMETER Spread;
+PARAMETER_TITLE Спред;
+PARAMETER_DESCRIPTION Спред;
+PARAMETER_TYPE NUMERIC(10,4);
+END
+
+END_PORTFOLIO_EX

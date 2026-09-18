@@ -1,0 +1,384 @@
+PORTFOLIO_EX Portfolio;
+DESCRIPTION Клиентский портфель;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST NC0058900000;
+
+PROGRAM
+
+client_code="xxx"
+firm_id="yyyy"
+
+brok_comm=0.05*0.01
+ts_comm=0.01*0.01
+
+file="portfolio_log.txt"
+tmp_file="portfolio_log.tmp"
+
+
+marginal_info=GET_CLIENT_MARGINAL_PORTFOLIO_INFO(firm_id,client_code)
+IN_ALL_ASSETS=GET_VALUE (marginal_info, "IN_ALL_ASSETS")
+ALL_ASSETS=GET_VALUE (marginal_info, "ALL_ASSETS")
+assets=all_assets
+
+cur_date=GET_DATETIME()
+cur_year=get_value(cur_date, "YEAR")
+cur_month=get_value(cur_date, "MONTH")
+cur_day=get_value(cur_date, "DAY")
+
+ FUNC SPLIT(s,from)
+    pos=FIND(s,from+1,",")
+    RESULT=TRIM(SUBSTR(s,from,pos-from))
+ END FUNC
+
+ FUNC MOVE(s,from)
+    RESULT=1+FIND(s,from+1,",")
+ END FUNC
+
+ FUNC ISZERO(d)
+	RESULT=0
+	if ((d<0.00001) and (d>-0.00001))
+		RESULT=1
+	end if
+ END FUNC
+
+ FUNC ISEQUAL(d1,d2)
+	RESULT=ISZERO(0+d1-d2)
+ END FUNC
+
+ FUNC REWRITE(f,f1)
+	CLEAR_FILE(f)
+	filelen=GET_FILE_LEN(f1)
+	for i from 1 to filelen
+		s=READ_LINE(f1,i,err)
+		WRITELN(f,s)
+	end for
+ END FUNC
+new_global("first_time_flag",0)
+new_global("last_trade_num",1)
+
+outputline=1
+err=0
+total_profit_loss=0
+total_vol=0
+new_item=0
+
+n=GET_NUMBER_OF("TRADES")
+FOR j FROM last_trade_num to n
+	last_trade_num=j+1
+        trade = GET_ITEM("TRADES", j)
+	t_client_code=GET_VALUE(trade,"CLIENTCODE")
+	if (t_client_code<>client_code)
+		continue
+	end if
+	
+	t_tradenum=GET_VALUE (trade, "NUMBER")
+	t_classcode=GET_VALUE (trade, "CLASSCODE")
+	t_seccode=GET_VALUE (trade, "SECCODE")
+	t_qty=GET_VALUE (trade, "QUANTITY")
+	t_price=GET_VALUE (trade, "PRICE")
+	t_comm=GET_VALUE (trade, "TS_COMISSION")
+	t_operation=GET_VALUE (trade, "OPERATION")
+
+	
+	sec_info=GET_SECURITY_INFO(t_classcode, t_seccode)
+	lot_size=GET_VALUE(sec_info,"LOT_SIZE")
+	scale=GET_VALUE(sec_info,"SCALE")
+
+	position_found=0
+	add_position=1
+	CLEAR_FILE(tmp_file)
+	filelen=GET_FILE_LEN(file)
+	for i from 1 to filelen
+		s=READ_LINE(file,i,err)
+		if -1=0+FIND(s,0,",")
+			continue
+		end if
+			from=0
+			tradenum=SPLIT(s,from)
+
+			    pos=FIND(s,1,",")
+			    tradenum=TRIM(SUBSTR(s,0,pos))
+
+			from=MOVE(s,from)
+			day=SPLIT(s,from)
+			from=MOVE(s,from)
+			month=SPLIT(s,from)
+			from=MOVE(s,from)
+			year=SPLIT(s,from)
+			from=MOVE(s,from)
+
+			direction=SPLIT(s,from)
+			from=MOVE(s,from)
+			classcode=SPLIT(s,from)
+			from=MOVE(s,from)
+			seccode=SPLIT(s,from)
+			from=MOVE(s,from)
+			price=SPLIT(s,from)
+			from=MOVE(s,from)
+			zero_price=SPLIT(s,from)
+			from=MOVE(s,from)
+			qty=SPLIT(s,from)
+			if classcode=t_classcode AND seccode=t_seccode
+				if (0+tradenum>=0+t_tradenum)
+					add_position=0
+					break
+				end if
+
+				if (direction="---")	
+					if (t_operation="BUY") then
+						direction="LONG"
+					else
+						direction="SHORT"
+					end if
+				end if
+
+				f_qty=0
+				f_value=0
+				f_price=price
+				if (direction="LONG") then
+					f_qty=f_qty+qty
+					f_value=f_value+qty*price
+				else
+					f_qty=f_qty-qty
+					f_value=f_value-qty*price
+				end if
+
+				if (t_operation="BUY") then
+					f_qty=f_qty+t_qty
+					if (direction="LONG") then
+						f_value=f_value+t_qty*t_price
+						if (ISZERO(f_qty)=0)
+							f_price=f_value/f_qty
+						end if
+					end if
+				else
+					f_qty=f_qty-t_qty
+					if (direction="SHORT") then
+						f_value=f_value-t_qty*t_price
+						if (ISZERO(f_qty)=0)
+							f_price=f_value/f_qty
+						end if
+					end if
+				end if
+
+				comm=f_qty*lot_size*f_price*(brok_comm + ts_comm)
+
+				f_direction="LONG"
+				if (0+f_qty<0)
+					f_direction="SHORT"
+					f_qty=-f_qty
+				end if
+
+				if (ISZERO(f_qty)=0)
+					f_zero_price=f_price + 2*comm/(f_qty*lot_size)
+					f_price=APPLY_SCALE(f_price,scale)
+					f_zero_price=APPLY_SCALE(f_zero_price,scale)
+				else
+					f_zero_price=0
+					f_price=0
+					f_qty=0
+					f_direction="---"
+				end if
+				s=t_tradenum & ", " & day & ", " & month & ", " & year & ", " & f_direction & ", "  & t_classcode & ", " & t_seccode & ", " & f_price & ", " & f_zero_price & ", " & f_qty & "," 
+				WRITELN(tmp_file,s)
+				position_found=1
+			else
+				WRITELN(tmp_file,s)
+			end if
+	end for
+	if add_position=1
+		if position_found=0
+			t_direction="LONG"
+			comm=t_qty*lot_size*t_price*(brok_comm + ts_comm)
+			t_zero_price=t_price
+			if (t_operation="SELL") then
+				t_direction="SHORT"
+				t_zero_price=t_price - 2*comm/(t_qty*lot_size)
+			else
+				t_zero_price=t_price + 2*comm/(t_qty*lot_size)
+			end if
+			t_price=APPLY_SCALE(t_price,scale)
+			t_zero_price=APPLY_SCALE(t_zero_price,scale)
+			s=t_tradenum & ", " & cur_day & ", " & cur_month & ", " & cur_year & ", " & t_direction & ", "  & t_classcode & ", " & t_seccode & ", " & t_price & ", " & t_zero_price & ", " & t_qty & "," 
+			WRITELN(file,s)
+		else
+			REWRITE(file,tmp_file)
+		end if
+	end if
+	CLEAR_FILE(tmp_file)
+END FOR
+
+DELETE_ALL_ITEMS()
+filelen=GET_FILE_LEN(file)
+for i from 1 to filelen
+	s=READ_LINE(file,i,err)
+	if -1=0+FIND(s,0,",")
+		continue
+	end if
+	from=0
+	tradenum=SPLIT(s,from)
+
+			from=MOVE(s,from)
+			day=SPLIT(s,from)
+			from=MOVE(s,from)
+			month=SPLIT(s,from)
+			from=MOVE(s,from)
+			year=SPLIT(s,from)
+			from=MOVE(s,from)
+
+	direction=SPLIT(s,from)
+	from=MOVE(s,from)
+	classcode=SPLIT(s,from)
+	from=MOVE(s,from)
+	seccode=SPLIT(s,from)
+	from=MOVE(s,from)
+	price=SPLIT(s,from)
+	from=MOVE(s,from)
+	zero_price=SPLIT(s,from)
+	from=MOVE(s,from)
+	qty=SPLIT(s,from)
+
+
+	cur_price=GET_PARAM(classcode, seccode, "LAST")
+	sec_info=GET_SECURITY_INFO(classcode, seccode)
+	lot_size=GET_VALUE(sec_info,"LOT_SIZE")
+	short_name=GET_VALUE(sec_info,"SHORT_NAME")
+
+	profit_loss=(cur_price-zero_price)*qty*lot_size
+	if (Direction="SHORT")
+		profit_loss=-profit_loss
+	end if
+	
+	
+	vol=qty*lot_size*cur_price
+	profit_loss_percent = 100 * profit_loss/vol
+	profit_loss_percent_whole = 100 * profit_loss/assets
+
+	total_vol=total_vol+vol
+	total_profit_loss=total_profit_loss+profit_loss
+
+	days=(0+cur_day-day) + 30*(cur_month-month) + 365* (cur_year-year)
+	profit_loss_percent_year = 365 * profit_loss_percent / days
+
+	output=CREATE_MAP()
+	output=SET_VALUE(output,"Security",short_name)
+	output=SET_VALUE(output,"Date","" & day & "." & month & "." & year)
+	output=SET_VALUE(output,"Direction",direction)
+	output=SET_VALUE(output,"CurrentPos",qty)
+	output=SET_VALUE(output,"CurrentValue",vol)
+	output=SET_VALUE(output,"Price",price)
+	output=SET_VALUE(output,"CurrentPrice",cur_price)
+	output=SET_VALUE(output,"ZeroPrice",zero_price)
+	output=SET_VALUE(output,"ProfitLoss",profit_loss)
+	output=SET_VALUE(output,"ProfitLossPercent",profit_loss_percent)
+	output=SET_VALUE(output,"ProfitLossPercentWhole",profit_loss_percent_whole)
+	output=SET_VALUE(output,"ProfitLossPercentYear",profit_loss_percent_year)
+	ADD_ITEM(outputline,output)
+	if (direction<>"---")
+		if (profit_loss>0) 
+			SET_ROW_COLOR_EX (outputline, "RGB(0,255,0)", "RGB(0,128,0)","DEFAULT_COLOR", "DEFAULT_COLOR" )
+		else	
+			SET_ROW_COLOR_EX (outputline, "RGB(255,0,0)", "RGB(128,0,0)","DEFAULT_COLOR", "DEFAULT_COLOR" )
+		end if
+	end if
+	outputline=outputline+1
+end for
+
+	total_profit_loss_percent = 100 * total_profit_loss/total_vol
+	total_profit_loss_percent_whole = 100 * total_profit_loss/assets
+
+	output=CREATE_MAP()
+	ADD_ITEM(outputline,output)
+	outputline=outputline+1
+
+	output=CREATE_MAP()
+	output=SET_VALUE(output,"Security","ИТОГО")
+	output=SET_VALUE(output,"Date","" & cur_day & "." & cur_month & "." & cur_year)
+	output=SET_VALUE(output,"CurrentValue",total_vol)
+	output=SET_VALUE(output,"ProfitLoss",total_profit_loss)
+	output=SET_VALUE(output,"ProfitLossPercent",total_profit_loss_percent)
+	output=SET_VALUE(output,"ProfitLossPercentWhole",total_profit_loss_percent_whole)
+	ADD_ITEM(outputline,output)
+	if (total_profit_loss>0) 
+		SET_ROW_COLOR_EX (outputline, "RGB(0,255,0)", "RGB(0,128,0)","DEFAULT_COLOR", "DEFAULT_COLOR" )
+	else	
+		SET_ROW_COLOR_EX (outputline, "RGB(255,0,0)", "RGB(128,0,0)","DEFAULT_COLOR", "DEFAULT_COLOR" )
+	end if
+	outputline=outputline+1
+
+first_time_flag=0
+END_PROGRAM
+
+PARAMETER Security;
+PARAMETER_TITLE Бумага;
+PARAMETER_DESCRIPTION Бумага;
+PARAMETER_TYPE STRING(20);
+END
+
+PARAMETER Date;
+PARAMETER_TITLE Дата;
+PARAMETER_DESCRIPTION Дата открытия;
+PARAMETER_TYPE STRING(10);
+END
+
+PARAMETER Direction;
+PARAMETER_TITLE Поза;
+PARAMETER_DESCRIPTION Поза;
+PARAMETER_TYPE STRING(5);
+END
+
+PARAMETER CurrentPos;
+PARAMETER_TITLE Кол.;
+PARAMETER_DESCRIPTION Количество;
+PARAMETER_TYPE NUMERIC(10,0);
+END
+
+PARAMETER CurrentValue;
+PARAMETER_TITLE Объем;
+PARAMETER_DESCRIPTION Объем;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+PARAMETER Price;
+PARAMETER_TITLE Ср. Цена;
+PARAMETER_DESCRIPTION Цена открытия;
+PARAMETER_TYPE NUMERIC(10,3);
+END
+
+PARAMETER ZeroPrice;
+PARAMETER_TITLE 0 Цена;
+PARAMETER_DESCRIPTION Безубыточная цена;
+PARAMETER_TYPE NUMERIC(10,3);
+END
+
+PARAMETER CurrentPrice;
+PARAMETER_TITLE Рын. Цена;
+PARAMETER_DESCRIPTION Рыночная цена;
+PARAMETER_TYPE NUMERIC(10,3);
+END
+
+PARAMETER ProfitLoss;
+PARAMETER_TITLE P/L р.;
+PARAMETER_DESCRIPTION Прибыль руб.;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+PARAMETER ProfitLossPercent;
+PARAMETER_TITLE P/L %;
+PARAMETER_DESCRIPTION Прибыль %;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+PARAMETER ProfitLossPercentYear;
+PARAMETER_TITLE P/L year %;
+PARAMETER_DESCRIPTION Прибыль годовых;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+PARAMETER ProfitLossPercentWhole;
+PARAMETER_TITLE P/L total %;
+PARAMETER_DESCRIPTION Прибыль от всего портфеля;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+END_PORTFOLIO_EX
+

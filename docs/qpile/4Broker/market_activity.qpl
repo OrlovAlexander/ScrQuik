@@ -1,0 +1,45 @@
+PORTFOLIO_EX Market_activity;
+DESCRIPTION Активность рынка;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRMID;
+
+PROGRAM
+new_global("last_trade_num", 0 + get_number_of("ALL_TRADES"))
+new_global("last_secs", 0)
+new_global("max_rate", 1)
+new_global("counter", 1)
+new_global("Sum", 0)
+string=""
+delete_all_items()
+dt=10
+			current_num=get_number_of("ALL_TRADES")
+			x=(current_num - last_trade_num)/dt
+			last_trade_num=current_num
+
+			if(x > max_rate)
+						max_rate=x
+			end if
+			i=floor((x/max_rate) * 50)
+			Sum=Sum+x
+			string=set_value(string, "test", "[Max Speed = " & max_rate & "] [Current Speed = "& x & "] [Average Speed = "& Sum/counter & "]")
+			add_item(1,string)
+			temp_string=""
+			for j from 0 to i
+					temp_string= temp_string & "#"
+			end for
+			for j from i+1 to 50
+					temp_string = temp_string & "-"
+			end for
+			string=set_value(string, "test", temp_string)
+			add_item(2,string)
+			SET_ROW_COLOR_EX (2, "RGB(" & i*5 & "," & (50-i)*5 & ",20)", "DEFAULT_COLOR", "DEFAULT_COLOR", "DEFAULT_COLOR")
+			counter=counter+1
+END_PROGRAM
+
+PARAMETER test;
+PARAMETER_TITLE Power;
+PARAMETER_DESCRIPTION Trade Power;
+PARAMETER_TYPE STRING(100);
+END
+
+END_PORTFOLIO_EX

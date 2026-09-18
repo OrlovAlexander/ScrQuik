@@ -1,0 +1,53 @@
+PORTFOLIO AVAILABLE_MONEY;
+DESCRIPTION Доступные деньги клиента;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST MC0012300000;
+
+PROGRAM
+  FirmCode = "MC0012300000"
+  
+  CurrentBalance = MONEY_CURRENT_BALANCE(ROWNAME, FirmCode, "EQTV", "SUR")
+  CurrentLimit   = MONEY_CURRENT_LIMIT(ROWNAME, FirmCode, "EQTV", "SUR")
+  Locked         = MONEY_LIMIT_LOCKED(ROWNAME, FirmCode, "EQTV", "SUR")
+  AvailableMoney = CurrentBalance + CurrentLimit - Locked
+
+  If AvailableMoney > 0
+    Status = "Заявки доступны"
+  Else
+    Status = "Заявки недоступны"
+    SET_ROW_COLOR(ROWNAME, "RGB(255,138,138)", "DEFAULT_COLOR")
+  End If
+END_PROGRAM
+
+
+PARAMETER CurrentBalance;
+PARAMETER_TITLE Текущий остаток;
+PARAMETER_DESCRIPTION Текущий остаток;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+PARAMETER CurrentLimit;
+PARAMETER_TITLE Текущий лимит;
+PARAMETER_DESCRIPTION Текущий лимит;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+PARAMETER Locked;
+PARAMETER_TITLE Заблокировано;
+PARAMETER_DESCRIPTION Заблокировано;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+PARAMETER AvailableMoney;
+PARAMETER_TITLE Доступно;
+PARAMETER_DESCRIPTION Доступные деньги клиента;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+PARAMETER Status;
+PARAMETER_TITLE Состояние;
+PARAMETER_DESCRIPTION Состояние;
+PARAMETER_TYPE STRING(20);
+END
+
+END_PORTFOLIO

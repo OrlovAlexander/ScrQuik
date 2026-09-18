@@ -1,0 +1,292 @@
+PORTFOLIO_EX Delays;
+DESCRIPTION Лог задержек;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRMID;
+
+PROGRAM
+  'T1 - время последней сделки
+  'T2 - время последней сделки в ТТП
+  'T3 - системное время
+
+  log_file_name="delays_protocol.txt"
+  start_time="10:30:00"
+  stop_time="18:45:00"
+  time_zone_shift=0
+
+  max_d1=3 ' = |T1-T2|
+  max_d2=3 ' = |T2-T3|
+  max_d3=3 ' = |T3-T1|
+
+FUNC is_in_list(list, pattern)
+  result = 0
+  if( (0 + find(list, 0, pattern)) == -1)
+    result = 0
+  else
+    result = 1
+  end if
+END FUNC
+
+FUNC Format_QUIK_Time(t)
+
+ result  = substr("" & t, 0, 2) & ":" & substr("" & t, 2, 2) & ":" & substr("" & t, 4, 2) 
+
+END FUNC
+
+FUNC ABS(x)
+   if (x<0)
+    result=-x
+   else
+    result=x
+   end if
+END FUNC
+
+                 
+FUNC Log(msg)
+  tstr=""
+  tstr= get_value(curr_datetime, "Day")   & "." & _
+        get_value(curr_datetime, "Month")   & "." & _
+        get_value(curr_datetime, "Year")  & " " & _
+        get_value(curr_datetime, "Hour")  & ":" & _
+        get_value(curr_datetime, "Min")   & ":" & _
+        get_value(curr_datetime, "Sec")   & "." & _
+        get_value(curr_datetime, "Millisec") & " " & msg
+  writeln(log_file_name, tstr)
+END FUNC
+
+FUNC CheckSysTime(time)
+   result=0
+   
+   unix_start_time=0 + ((0 + substr("" & start_time, 0, 2)) * 3600) + ((0 + substr("" & start_time, 3, 2)) * 60) + ((0 + substr("" & start_time, 6, 2)))
+      
+   unix_stop_time=0+ ((0 + substr("" & stop_time, 0, 2)) * 3600) + ((0 + substr("" & stop_time, 3, 2)) * 60) + ((0 + substr("" & stop_time, 6, 2)))
+   
+   unix_sys_time = ((0 + get_value(time, "hour") * 3600) + ((0 + get_value(time, "min") * 60) + ((0 + get_value(time, "hour")))))
+   
+   if(unix_start_time <= unix_sys_time AND unix_sys_time <= unix_stop_time)
+    
+    result = 1
+    
+   end if
+END FUNC
+
+  new_global("last_trade", 1)
+  new_global("max_delta", 0)
+  new_global("max_delta_time", 0)
+  new_global("max_delta_trade_time", 0)
+  new_global("first_start", 1)
+  new_global("problem_line", 0)
+  new_global("green_line", 1)
+  new_global("T1", 0)
+  new_global("T2", 0)
+  new_global("sec_code","EESR")
+  new_global("class_code","EQBR")
+  new_global("ttp_time","103000")
+  new_global("trade_time","103000")
+  new_global("trade_num", 0)
+  
+  
+  curr_datetime = GET_DATETIME()
+  
+  classes_list="EQBR,EQNE,EQNL,EQNS"
+  
+  string_map=""
+  
+  D1=0
+  D2=0
+  D3=0
+  
+  
+  T3=0
+  
+  found=0
+  
+  was_trades=0
+  
+  if(CheckSysTime(curr_datetime) == 1)  
+    if (first_start == 1)
+        string_map = set_value(string_map, "security", "")
+        
+        string_map = set_value(string_map, "number", "")
+        
+        string_map = set_value(string_map, "T1", 0)
+        
+        string_map = set_value(string_map, "T2", 0)
+  
+        string_map = set_value(string_map, "T3", 0)
+        
+        string_map = set_value(string_map, "D1", 0)
+        
+        string_map = set_value(string_map, "D2", 0)
+        
+        string_map = set_value(string_map, "D3", 0)
+        
+        add_item(1, string_map)
+        
+        SET_ROW_COLOR_EX(green_line, "RGB(138,255,138)", "DEFAULT_COLOR", "DEFAULT_COLOR", "DEFAULT_COLOR")
+        
+        first_start=0
+        
+    end if
+    
+    n=get_number_of("ALL_TRADES")
+    
+    for i from last_trade to n-1
+      
+      trade=get_item("ALL_TRADES", last_trade + (n-i))
+      
+      if(is_in_list(classes_list, get_value(trade, "classcode")) == 1)
+        
+        trade_num = get_value(trade, "number")
+        
+        sec_code=get_value(trade, "seccode")
+        
+        class_code=get_value(trade, "classcode")
+        
+        ttp_time=0 + get_param(class_code, sec_code, "time")
+        
+        trade_time=0 + get_value(trade, "time")
+        
+        T1=0 + ((0 + substr("" & trade_time, 0, 2)) * 3600) + ((0 + substr("" & trade_time, 2, 2)) * 60) + ((0 + substr("" & trade_time, 4, 2)))
+        
+        T2=0 + ((0 + substr("" & ttp_time, 0, 2)) * 3600) + ((0 + substr("" & ttp_time, 2, 2)) * 60) + ((0 + substr("" & ttp_time, 4, 2)))
+        
+        was_trades=1
+        
+        break
+        
+      end if
+     
+     end for
+        
+      T3=0+  ( (0 + get_value(curr_datetime, "hour") * 3600) + ( (0 + get_value(curr_datetime, "min") * 60) + (0 + get_value(curr_datetime, "sec"))))
+      
+      D1=ABS(T1-T2)
+      D2=ABS(T2- (T3 - (time_zone_shift*3600)))
+      D3=ABS( (T3 - (time_zone_shift*3600)) - T1)
+      
+      string_map = set_value(string_map, "security", sec_code)
+      
+      string_map = set_value(string_map, "number", trade_num)
+      
+      string_map = set_value(string_map, "T1", Format_QUIK_Time(trade_time))
+      
+      string_map = set_value(string_map, "T2", Format_QUIK_Time(ttp_time) )
+
+      string_map = set_value(string_map, "T3", get_value(curr_datetime, "hour") & ":" & get_value(curr_datetime, "min") & ":" & get_value(curr_datetime, "sec")) 
+      
+      string_map = set_value(string_map, "D1", D1)
+      
+      string_map = set_value(string_map, "D2", D2)
+      
+      string_map = set_value(string_map, "D3", D3)
+      
+      if(was_trades == 0)
+        
+        modify_item(green_line, string_map)
+        
+        if((max_d2 <= D2) OR (max_d3 <= D3))
+        
+           SET_ROW_COLOR_EX(green_line, "RGB(255,138,138)", "DEFAULT_COLOR", "DEFAULT_COLOR", "DEFAULT_COLOR")
+           
+        else
+        
+           SET_ROW_COLOR_EX(green_line, "RGB(138,255,138)", "DEFAULT_COLOR", "DEFAULT_COLOR", "DEFAULT_COLOR")
+              
+        end if
+      
+      else
+      
+        if( (max_d1 <= D1) OR (max_d2 <= D2) OR (max_d3 <= D3) )
+        
+            modify_item(green_line, string_map)
+           
+            SET_ROW_COLOR_EX(green_line, "DEFAULT_COLOR", "DEFAULT_COLOR", "DEFAULT_COLOR", "DEFAULT_COLOR")
+           
+            green_line=green_line+1
+           
+            string_map = set_value(string_map, "security", "")
+            
+            string_map = set_value(string_map, "number", trade_num)
+        
+            string_map = set_value(string_map, "T1", 0)
+        
+            string_map = set_value(string_map, "T2", 0)
+            
+            string_map = set_value(string_map, "T3", 0)
+        
+            string_map = set_value(string_map, "D1", 0)
+        
+            string_map = set_value(string_map, "D2", 0)
+        
+            string_map = set_value(string_map, "D3", 0)
+            
+            add_item(green_line, string_map)
+           
+            problem_line=problem_line+1
+            
+            Log("security=" & sec_code & ", trade_num=" & trade_num & ", T1=" & Format_QUIK_Time(trade_time) & ", T2="& Format_QUIK_Time(ttp_time) & ", T3=" & get_value(curr_datetime, "hour") & ":" & get_value(curr_datetime, "min") & ":" & get_value(curr_datetime, "sec") & ", |T1-T2|=" & D1 & ", |T2-T3|=" & D2 & ", |T3-T1|=" & D3)
+            
+        else
+          modify_item(green_line, string_map)
+        end if
+        
+        SET_ROW_COLOR_EX(green_line, "RGB(138,255,138)", "DEFAULT_COLOR", "DEFAULT_COLOR", "DEFAULT_COLOR")
+        
+      end if  
+        
+    last_trade=n
+    
+  end if
+END_PROGRAM
+
+PARAMETER Security;
+PARAMETER_TITLE Бумага;
+PARAMETER_DESCRIPTION Бумага;
+PARAMETER_TYPE STRING(64);
+END
+
+
+PARAMETER Number;
+PARAMETER_TITLE Номер сделки;
+PARAMETER_DESCRIPTION Номер сделки;
+PARAMETER_TYPE STRING(64);
+END
+
+PARAMETER T1;
+PARAMETER_TITLE время сделки;
+PARAMETER_DESCRIPTION время сделки;
+PARAMETER_TYPE STRING(64);
+END
+
+PARAMETER T2;
+PARAMETER_TITLE время в ТТП;
+PARAMETER_DESCRIPTION время в ТТП;
+PARAMETER_TYPE STRING(64);
+END
+
+PARAMETER T3;
+PARAMETER_TITLE системное время;
+PARAMETER_DESCRIPTION системное время;
+PARAMETER_TYPE STRING(64);
+END
+
+PARAMETER D1;
+PARAMETER_TITLE |T1-T2|;
+PARAMETER_DESCRIPTION |T1-T2|;
+PARAMETER_TYPE STRING(64);
+END
+
+PARAMETER D2;
+PARAMETER_TITLE |T2-T3|;
+PARAMETER_DESCRIPTION |T2-T3|;
+PARAMETER_TYPE STRING(64);
+END
+
+PARAMETER D3;
+PARAMETER_TITLE |T3-T1|;
+PARAMETER_DESCRIPTION |T3-T1|;
+PARAMETER_TYPE STRING(64);
+END
+
+
+END_PORTFOLIO_EX

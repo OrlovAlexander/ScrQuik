@@ -1,0 +1,51 @@
+PORTFOLIO_EX OS;
+DESCRIPTION Option Scaner;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRM_ID;
+PROGRAM
+
+'Автор:  Михаил Булычев
+'Что делает:
+'  портфель сканирует опционы и отыскивает контракты у которых цена превышает ГО
+'Как использовать:
+'  В следующей строке следует указать код класса опционов
+'  sec_list=GET_CLASS_SECURITIES("SPBOPT")
+
+  line=0
+  string=create_map()
+	delete_all_items()
+	sec_list=GET_CLASS_SECURITIES("SPBOPT")
+	for sec_code in sec_list
+		if(get_param("SPBOPT", sec_code, "bgop") < get_param("SPBOPT", sec_code, "theorprice"))
+    	string=set_value(string, "OptionCode", sec_code)
+    	string=set_value(string, "go", get_param("SPBOPT", sec_code, "bgop"))
+    	string=set_value(string, "tp", get_param("SPBOPT", sec_code, "theorprice"))
+    	line=line+1
+    	add_item(line, string)
+		end if
+	end for
+	if(line == 0)
+		string=set_value(string, "OptionCode", "Всё зашибись")
+	end if
+
+
+END_PROGRAM
+PARAMETER  OptionCode;
+PARAMETER_TITLE Код опциона;
+PARAMETER_DESCRIPTION Код Опциона;
+PARAMETER_TYPE STRING(64);
+END
+
+PARAMETER  go;
+PARAMETER_TITLE ГО;
+PARAMETER_DESCRIPTION ГО;
+PARAMETER_TYPE STRING(64);
+END
+
+PARAMETER  tp;
+PARAMETER_TITLE Теор. цена;
+PARAMETER_DESCRIPTION Теор. цена;
+PARAMETER_TYPE STRING(64);
+END
+
+END_PORTFOLIO_EX

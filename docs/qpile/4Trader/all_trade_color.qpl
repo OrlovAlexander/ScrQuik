@@ -1,0 +1,73 @@
+PORTFOLIO_EX ALLTradeColor;
+DESCRIPTION цвета таблицы всех сделок;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRMID;
+PROGRAM
+'Автор:  Михаил Булычев
+'Что делает:
+'   подсветка строчек в таблице всех сделок в зависимости от направления (покупка\продажа)
+'Как использовать:
+
+FUNC Format_QUIK_Time(t)
+  if len(t) == 5
+    result  = "0" & substr("" & t, 0, 1) & ":" & substr("" & t, 1, 2) & ":" & substr("" & t, 3, 2)
+  else
+    result  = substr("" & t, 0, 2) & ":" & substr("" & t, 2, 2) & ":" & substr("" & t, 4, 2)
+  end if
+END FUNC
+  mTrade=create_map()
+  new_global("last_trade", 1)
+  n=get_number_of("ALL_TRADES")
+  for i from last_trade to 1000
+    mTrade=get_item("ALL_TRADES", i)
+    mTrade=set_value(mtrade, "time", Format_QUIK_Time(get_value(mTrade, "time")))
+    add_item(i, mTrade)
+    if (get_value(mTrade, "OPERATION") == "BUY")
+      SET_ROW_COLOR_EX(i, "RGB(138,255,138)", "DEFAULT_COLOR", "DEFAULT_COLOR", "DEFAULT_COLOR")
+    else
+      SET_ROW_COLOR_EX(i, "RGB(255,138,138)", "DEFAULT_COLOR", "DEFAULT_COLOR", "DEFAULT_COLOR")  
+    end if
+  end for
+  last_trade=n+1
+END_PROGRAM
+
+
+PARAMETER NUMBER;
+PARAMETER_TITLE Номер сделки;
+PARAMETER_DESCRIPTION Номер сделки;
+PARAMETER_TYPE Numeric(20,0);
+END
+
+PARAMETER SECURITY;
+PARAMETER_TITLE Бумага;
+PARAMETER_DESCRIPTION Бумага;
+PARAMETER_TYPE STRING(32);
+END
+
+PARAMETER OPERATION;
+PARAMETER_TITLE Операция;
+PARAMETER_DESCRIPTION Операция;
+PARAMETER_TYPE STRING(32);
+END
+
+PARAMETER TIME;
+PARAMETER_TITLE Время выставления;
+PARAMETER_DESCRIPTION Время выставления;
+PARAMETER_TYPE String(32);
+END
+
+
+PARAMETER VALUE;
+PARAMETER_TITLE Объем в денежных средствах;
+PARAMETER_DESCRIPTION Объем в денежных средствах;
+PARAMETER_TYPE Numeric(10,2);
+END
+
+PARAMETER QUANTITY;
+PARAMETER_TITLE Количество в лотах;
+PARAMETER_DESCRIPTION Количество в лотах;
+PARAMETER_TYPE Numeric(10,0);
+END
+
+END_PORTFOLIO_EX
+

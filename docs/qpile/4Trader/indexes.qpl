@@ -1,0 +1,108 @@
+PORTFOLIO_EX INDEXES;
+DESCRIPTION текущая таблица для индексов, с расчетом некоторых параметров для индексов ММВБ ;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRMID;
+
+
+PROGRAM
+
+' Данный портфель формирует таблицу -
+'
+' 1. Для индексов РТС транслирует показатели с биржи без изменений
+' 2. Для индексов ММВБ рассчитывает процент к предыдущему закрытию и другие параметры
+
+strIndexClassesList = "INDX,RTSIND"
+
+mapIndexRowInfo = CREATE_MAP()
+mapIndexSecInfo = CREATE_MAP()
+
+' n - число строк в таблице индексов
+i = 0
+NEW_GLOBAL("FirstRun", 1 )
+
+for strClass in strIndexClassesList
+strIndexes = GET_CLASS_SECURITIES( strClass )
+
+for strIndexSecCode in strIndexes
+
+mapIndexSecInfo = GET_SECURITY_INFO( strClass, strIndexSecCode )
+
+numCurrentValue = GET_PARAM( strClass, strIndexSecCode, "CURRENTVALUE" )
+numLastValue = GET_PARAM( strClass, strIndexSecCode, "LASTVALUE" )
+
+if strClass == "RTSIND"
+numChangeToClosePct = GET_PARAM( strClass, strIndexSecCode, "CHNGCLOSE" )
+else
+if strClass == "INDX"
+numChngClose = numCurrentValue - numLastValue
+numChangeToClosePct = 100*(numCurrentValue - numLastValue)/numLastValue
+end if
+end if 
+
+numChngOpen = GET_PARAM( strClass, strIndexSecCode, "CHNGOPEN" )
+
+
+mapIndexRowInfo = SET_VALUE( mapIndexRowInfo, "SHORT_NAME", GET_VALUE( mapIndexSecInfo, "SHORT_NAME" ) )
+mapIndexRowInfo = SET_VALUE( mapIndexRowInfo, "CURRENTVALUE", numCurrentValue  )
+mapIndexRowInfo = SET_VALUE( mapIndexRowInfo, "LASTVALUE", numLastValue )
+mapIndexRowInfo = SET_VALUE( mapIndexRowInfo, "OPENVAL", GET_PARAM( strClass, strIndexSecCode, "OPENVAL" ) )
+
+mapIndexRowInfo = SET_VALUE( mapIndexRowInfo, "CHNGOPEN", numChngOpen )
+mapIndexRowInfo = SET_VALUE( mapIndexRowInfo, "ChangeToClosePct", numChangeToClosePct)
+
+i=i+1
+if FirstRun = 1
+ADD_ITEM(i, mapIndexRowInfo)
+else
+MODIFY_ITEM(i, mapIndexRowInfo)
+end if
+
+if numChangeToClosePct > 0
+SET_ROW_COLOR_EX(i, "DEFAULT_COLOR", "DEFAULT_COLOR", "RGB(0, 0, 155)", "DEFAULT_COLOR")
+else
+SET_ROW_COLOR_EX(i, "DEFAULT_COLOR", "DEFAULT_COLOR", "RGB(155, 0, 0)", "DEFAULT_COLOR")
+end if
+end for
+end for 
+
+firstrun = 0
+END_PROGRAM
+
+
+PARAMETER SHORT_NAME;
+PARAMETER_TITLE индекс;
+PARAMETER_DESCRIPTION название индекса;
+PARAMETER_TYPE STRING(20);
+END
+
+PARAMETER CURRENTVALUE;
+PARAMETER_TITLE тек.знач;
+PARAMETER_DESCRIPTION текущее значение индекса;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+PARAMETER LASTVALUE;
+PARAMETER_TITLE закр;
+PARAMETER_DESCRIPTION значение последнего закрытия индекса;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+PARAMETER OPENVAL;
+PARAMETER_TITLE откр;
+PARAMETER_DESCRIPTION значение открытия индекса;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+PARAMETER CHNGOPEN;
+PARAMETER_TITLE изм к откр;
+PARAMETER_DESCRIPTION изменение индекса к открытию в пунктах;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+PARAMETER ChangeToClosePct;
+PARAMETER_TITLE % к закр;
+PARAMETER_DESCRIPTION изменение индекса к открытию в %;
+PARAMETER_TYPE NUMERIC(10,2);
+END
+
+END_PORTFOLIO_EX

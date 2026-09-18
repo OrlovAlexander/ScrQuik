@@ -1,0 +1,157 @@
+PORTFOLIO_EX KKND;
+DESCRIPTION tamagocha kknd;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRM_ID;
+PROGRAM
+
+'Автор:  Михаил Булычев
+'Что делает:
+'  поиск потенциальных "тамагочеров" на рынке фортс.
+'  по каждому клиентскому счёту считаются активные, снятые и исполненные
+'  заявки. Так же считается отношение снятого количества к общему количеству
+'  заявок. Строчки сортируются по общему количеству заявок и подсвечиваются 
+'  градиентом красного цвета в зависимости от значения поля ratio
+'Как использовать:
+'  В следующих строках следует задать код фирмы и код класса
+'  FIRM_ID="SPBFUTXXX000"
+'  CLASS_CODE="SPBFUT"  
+
+
+FUNC check_account(Data, count, account)
+  result = 0
+  for xxx from 1 to count
+    'Message("account=" & account, 1)
+    if(get_value(data, "" & xxx) == account)
+      result=1
+      break
+    end if
+  end for
+end func
+
+func process_order(data, order)
+  result =0
+  status=get_value(order, "STATUS")
+  account=get_value(order, "account")
+  if(status == "active")
+    'Message("act", 1)
+    data=set_value(data, account & "_act", get_value(data, account & "_act") + 1)
+  end if
+  if(status == "killed")
+    'Message("can", 1)
+    data=set_value(data, account & "_can", get_value(data, account & "_can") + 1)
+  end if
+  if(status == "filled")
+    'Message("fill", 1)
+    data=set_value(data, account & "_fil", get_value(data, account & "_fil") + 1)
+  end if
+  data=set_value(data, account & "_total", get_value(data, account & "_total") + 1)
+  result=data
+ end func
+
+
+  FIRM_ID="SPBFUTXXX000"
+  CLASS_CODE="SPBFUT"  
+  mData=create_map()
+  mOrder=create_map()
+  TotalCount=0
+  n=Get_number_of("ORDERS")
+  for i from 1 to n
+    mOrder = get_item("ORDERS", i)
+    if(get_value(mOrder, "CLASSCODE") == "SPBFUT")
+    
+      'Message("1123", 3)
+      'проверяем, был ли у нас такой эккаунт
+      order_account=get_value(mOrder, "ACCOUNT")
+      if(check_account(mData, TotalCount, order_Account)== 0) 'такого счёта исчо не было 
+      TotalCount=TotalCount+1
+      mData = set_value(mData,"" & TotalCount, Order_Account)
+    end if
+    mData = process_order(mData, mOrder)
+    end if
+  end for
+  
+  
+  cSortedArray = create_collection()
+  
+  string=create_map()
+  acc=""
+  
+  'Message(TotalCount, 2)
+  for zzz from 1 to TotalCount
+    acc=get_value(mData, "" & zzz)
+    ratio=0+get_value(mdata, acc&"_can") / get_value(mdata, acc&"_total") * 100
+    string =set_value(string, "ACCID", acc)
+    string =set_value(string, "total", get_value(mdata, acc&"_total"))
+    string =set_value(string, "canceled", get_value(mdata, acc&"_can"))
+    string =set_value(string, "filled", get_value(mdata, acc&"_fil"))
+    string =set_value(string, "active", get_value(mdata, acc&"_act"))
+    string =set_value(string, "ratio", ratio)    
+    n=get_collection_count(cSortedArray)
+    for i from 0 to n
+      if((0+get_value(string, "total")) >= (0+get_value(get_collection_item(cSortedArray, i), "total")))
+        cSortedArray=insert_collection_item(cSortedArray, i, string)
+        break
+      end if    
+    end for
+  end for
+  
+  delete_all_items()
+  n=get_collection_count(cSortedArray)
+  j=1
+  delete_all_items()
+  for i from 0 to n
+    add_item(j, get_collection_item(cSortedArray, i))
+    ratio1=0+get_value(get_collection_item(cSortedArray, i), "ratio")
+    if(ratio1 >= 85  AND ratio1 < 90)
+      SET_ROW_COLOR_EX(j, "RGB(255,200,200)", "DEFAULT_COLOR", "DEFAULT_COLOR", "DEFAULT_COLOR")
+    end if
+    if(ratio1 >= 90  AND ratio1 < 95)
+      SET_ROW_COLOR_EX(j, "RGB(255,125,125)", "DEFAULT_COLOR", "DEFAULT_COLOR", "DEFAULT_COLOR")
+    end if
+    if(ratio1 >= 95)
+      SET_ROW_COLOR_EX(j, "RGB(255,0,0)", "DEFAULT_COLOR", "DEFAULT_COLOR", "DEFAULT_COLOR")
+    end if
+      
+    j=j+1
+  end for
+  
+  
+END_PROGRAM
+
+PARAMETER ACCID;
+PARAMETER_TITLE Счет;
+PARAMETER_DESCRIPTION Счет;
+PARAMETER_TYPE STRING(32);
+END
+
+PARAMETER total;
+PARAMETER_TITLE всего;
+PARAMETER_DESCRIPTION всего;
+PARAMETER_TYPE NUMERIC(6,0);
+END
+
+PARAMETER canceled;
+PARAMETER_TITLE снятые;
+PARAMETER_DESCRIPTION Счет;
+PARAMETER_TYPE NUMERIC(6,0);
+END
+
+PARAMETER filled;
+PARAMETER_TITLE исполненные;
+PARAMETER_DESCRIPTION Счет;
+PARAMETER_TYPE NUMERIC(6,0);
+END
+
+PARAMETER active;
+PARAMETER_TITLE активные;
+PARAMETER_DESCRIPTION Счет;
+PARAMETER_TYPE NUMERIC(6,0);
+END
+
+PARAMETER ratio;
+PARAMETER_TITLE отношение всего/снятые;
+PARAMETER_DESCRIPTION отношение снятые/всего %;
+PARAMETER_TYPE NUMERIC(3,3);
+END
+
+END_PORTFOLIO_EX

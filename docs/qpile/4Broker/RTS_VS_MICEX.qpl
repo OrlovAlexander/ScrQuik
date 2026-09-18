@@ -1,0 +1,57 @@
+PORTFOLIO_EX rts_vs_micex;
+DESCRIPTION rts_vs_micex;
+CLIENTS_LIST ALL_CLIENTS;
+FIRMS_LIST FIRMID;
+
+PROGRAM
+  
+  new_global("rts_value", 0)
+  new_global("micex_value", 0)
+  new_global("last_item", 1)
+  
+  map=create_map()
+  string=create_map()
+  delete_all_items()
+  
+  for i from last_item to Get_number_OF("ALL_TRADES")
+    'message(map, 2)
+    map=get_item("ALL_TRADES", i)
+    if((get_value(map, "CLASSCODE") == "EQNE") AND (get_value(map, "seccode") == "GAZP"))
+      micex_value=micex_value + (0 + get_value(map, "value"))
+    end if
+    if((get_value(map, "CLASSCODE") == "GAZ") AND (get_value(map, "seccode") == "GSPBEX"))
+      rts_value=rts_value + (0 + get_value(map, "value"))
+    end if
+    
+  end for
+  string=set_value(string, "micex_value", micex_value)
+  string=set_value(string, "rts_value", rts_value)
+  last_item = Get_number_OF("ALL_TRADES")
+  
+  sum=RTS_VALUE+MICEX_VALUE
+  
+  string=set_value(string, "RATIO", "" & apply_scale( micex_value/(sum/100),4) & "% / " & apply_scale( rts_value/(sum/100),4) & "%")
+  
+  add_item(1, string)
+
+END_PROGRAM
+
+PARAMETER micex_value;
+PARAMETER_TITLE MICEX;
+PARAMETER_DESCRIPTION MICEX;
+PARAMETER_TYPE NUMERIC(12,2);
+END
+
+PARAMETER RTS_value;
+PARAMETER_TITLE RTS;
+PARAMETER_DESCRIPTION RTS;
+PARAMETER_TYPE NUMERIC(12,2);
+END
+
+PARAMETER RATIO;
+PARAMETER_TITLE RATIO;
+PARAMETER_DESCRIPTION RATIO;
+PARAMETER_TYPE STRING(20);
+END
+
+END_PORTFOLIO_EX
