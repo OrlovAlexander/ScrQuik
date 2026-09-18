@@ -5,6 +5,7 @@ srcGitHub/
 .idea/
 *.user
 *.suo
+finam.wnd
 
 # Python
 __pycache__/
