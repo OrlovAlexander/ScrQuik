@@ -3,7 +3,7 @@ _G.load   = _G.loadfile or _G.load
 local maLib = load(_G.getWorkingFolder().."\\Luaindicators\\maLib.lua")()
 
 local logFile = nil
-logFile = io.open(_G.getWorkingFolder().."\\LuaIndicators\\RPM_TF_Current.txt", "w")
+local LOG_PATH = nil
 
 local message       = _G['message']
 local RGB           = _G['RGB']
@@ -60,6 +60,59 @@ local function myLog(...)
     logFile:flush();
 end
 
+local function closeLog()
+    if logFile ~= nil then
+        logFile:close()
+        logFile = nil
+    end
+end
+
+local function chartTfTag()
+    local ds = _G.getDataSourceInfo and _G.getDataSourceInfo() or {}
+    local interval = tonumber(ds.interval)
+    if interval == nil then
+        return "NA"
+    end
+    if interval >= 1440 and interval % 1440 == 0 then
+        local days = interval / 1440
+        if days == 1 then return "D1" end
+        if days == 7 then return "W1" end
+        return "D"..tostring(days)
+    end
+    if interval >= 60 and interval % 60 == 0 then
+        return "H"..tostring(interval / 60)
+    end
+    return "M"..tostring(interval)
+end
+
+local function instrumentHeader()
+    local ds = _G.getDataSourceInfo and _G.getDataSourceInfo() or {}
+    local classCode = ds.class_code or "?"
+    local secCode = ds.sec_code or "?"
+    local interval = ds.interval or "?"
+    local nBars = _G.Size and _G.Size() or "?"
+    return classCode, secCode, interval, nBars
+end
+
+local function logsDir()
+    local dir = _G.getWorkingFolder().."\\LuaIndicators\\logs"
+    os.execute('mkdir "'..dir..'" >nul 2>&1')
+    return dir
+end
+
+local function reopenLog()
+    closeLog()
+    local tf = chartTfTag()
+    LOG_PATH = logsDir().."\\RPM_TF_Current."..tf..".txt"
+    logFile = io.open(LOG_PATH, "w")
+    if logFile == nil then
+        return
+    end
+    local classCode, secCode, interval, nBars = instrumentHeader()
+    myLog("=== RPM_TF_Current log session ===")
+    myLog("INSTR", classCode, secCode, "tf=", tf, "interval=", interval, "bars=", nBars)
+end
+
 
 local function Algo(Fsettings, ds)
 
@@ -88,6 +141,7 @@ local function Algo(Fsettings, ds)
             end
 
             if fRpm == nil or index == 1 then
+                reopenLog()
                 myLog("fRpm == nil or index == 1")
                 fRpm = maLib.new({method = 'RPMTFC', period = period}, ds)
                 return
@@ -132,6 +186,10 @@ end
 
 function _G.OnChangeSettings()
     _G.Init()
+end
+
+function _G.OnStop()
+    closeLog()
 end
 
 function _G.OnCalculate(index)

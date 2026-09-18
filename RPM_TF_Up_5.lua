@@ -3,7 +3,6 @@ _G.load   = _G.loadfile or _G.load
 local maLib = load(_G.getWorkingFolder().."\\Luaindicators\\maLib.lua")()
 
 local logFile = nil
--- logFile = io.open(_G.getWorkingFolder().."\\LuaIndicators\\RPM_TF_Up_5.txt", "w")
 
 local message               = _G['message']
 local number                = _G['number']
@@ -280,6 +279,58 @@ local function myLog(...)
     logFile:flush();
 end
 
+local function closeCalcLog()
+    if logFile ~= nil then
+        logFile:close()
+        logFile = nil
+    end
+end
+
+local function chartTfTag()
+    local ds = _G.getDataSourceInfo and _G.getDataSourceInfo() or {}
+    local interval = tonumber(ds.interval)
+    if interval == nil then
+        return "NA"
+    end
+    if interval >= 1440 and interval % 1440 == 0 then
+        local days = interval / 1440
+        if days == 1 then return "D1" end
+        if days == 7 then return "W1" end
+        return "D"..tostring(days)
+    end
+    if interval >= 60 and interval % 60 == 0 then
+        return "H"..tostring(interval / 60)
+    end
+    return "M"..tostring(interval)
+end
+
+local function instrumentHeader()
+    local ds = _G.getDataSourceInfo and _G.getDataSourceInfo() or {}
+    local classCode = ds.class_code or "?"
+    local secCode = ds.sec_code or "?"
+    local interval = ds.interval or "?"
+    local nBars = _G.Size and _G.Size() or "?"
+    return classCode, secCode, interval, nBars
+end
+
+local function logsDir()
+    local dir = _G.getWorkingFolder().."\\LuaIndicators\\logs"
+    os.execute('mkdir "'..dir..'" >nul 2>&1')
+    return dir
+end
+
+local function reopenCalcLog()
+    closeCalcLog()
+    local tf = chartTfTag()
+    logFile = io.open(logsDir().."\\RPM_TF_Up_5."..tf..".txt", "w")
+    if logFile == nil then
+        return
+    end
+    local classCode, secCode, interval, nBars = instrumentHeader()
+    myLog("=== RPM_TF_Up_5 log session ===")
+    myLog("INSTR", classCode, secCode, "tf=", tf, "interval=", interval, "bars=", nBars)
+end
+
 local function getSetting(settings, ...)
     local n = select('#', ...)
     local default = select(n, ...)
@@ -317,7 +368,7 @@ local function toYYYYMMDDHHMMSS(datetime)
 	 end
 end
 
--- --- div log (Div_Log=1 -> LuaIndicators\RPM_TF_Up_5_div.log) ---
+-- --- div log (Div_Log=1 -> LuaIndicators\logs\RPM_TF_Up_5_div.{TF}.log) ---
 local divLogEnabled       = false
 local divLogFile          = nil
 local divLogOpened        = false
@@ -355,23 +406,26 @@ local function divLogLayer(layer, ...)
 end
 
 local function initDivLog(settings)
-    local enabled = getSetting(settings, "Div_Log", "DivLog", 0) == 1
-    divLogEnabled = enabled
-    if not enabled then
+    if divLogFile ~= nil then
+        divLogFile:close()
+        divLogFile = nil
+        divLogOpened = false
+    end
+    divLogEnabled = true
+    local tf = chartTfTag()
+    divLogFile = io.open(logsDir().."\\RPM_TF_Up_5_div."..tf..".log", "w")
+    if divLogFile == nil then
         return
     end
-    if divLogFile == nil then
-        divLogFile = io.open(_G.getWorkingFolder().."\\LuaIndicators\\RPM_TF_Up_5_div.log", "w")
-    end
-    if divLogFile and not divLogOpened then
-        divLogOpened = true
-        divLog("=== RPM_TF_Up_5 divergence log session ===")
-        divLog("Div_SegPeriod=", settings.Div_SegPeriod or DIV_SEG_PERIOD,
-            "Div_SegsMax=", settings.Div_SegsMax or DIV_SEGS_MAX,
-            "Div_PivotSpanMax=", settings.Div_PivotSpanMax or DIV_PIVOT_SPAN_MAX,
-            "Div_DrawHidden=", getSetting(settings, "Div_DrawHidden", "DivDrawHidden", 0),
-            "Div_DrawWeak=", getSetting(settings, "Div_DrawWeak", "DivDrawWeak", 0))
-    end
+    divLogOpened = true
+    local classCode, secCode, interval, nBars = instrumentHeader()
+    divLog("=== RPM_TF_Up_5 divergence log session ===")
+    divLog("INSTR", classCode, secCode, "tf=", tf, "interval=", interval, "bars=", nBars)
+    divLog("Div_SegPeriod=", settings.Div_SegPeriod or DIV_SEG_PERIOD,
+        "Div_SegsMax=", settings.Div_SegsMax or DIV_SEGS_MAX,
+        "Div_PivotSpanMax=", settings.Div_PivotSpanMax or DIV_PIVOT_SPAN_MAX,
+        "Div_DrawHidden=", getSetting(settings, "Div_DrawHidden", "DivDrawHidden", 0),
+        "Div_DrawWeak=", getSetting(settings, "Div_DrawWeak", "DivDrawWeak", 0))
 end
 
 local function closeDivLog()
@@ -1612,8 +1666,6 @@ local function Algo(Fsettings, ds)
     local needMiddle = layerEnabled(middleDraw, middleHistDraw, middleDivDraw, middleLabelDraw)
     local needUp     = layerEnabled(upDraw, upHistDraw, upDivDraw, upLabelDraw)
 
-    initDivLog(Fsettings)
-
     local fEmaMiddle
     local fEmaMiddleSlow
     local fEmaSmall
@@ -1704,6 +1756,8 @@ local function Algo(Fsettings, ds)
     return function (index)
 
         if index == 1 then
+            reopenCalcLog()
+            initDivLog(Fsettings)
             if needSmall then
                 clearArray(smallPrice)
                 fEmaSmall = nil
@@ -1977,6 +2031,7 @@ local function Algo(Fsettings, ds)
 end
 
 function _G.Init()
+    closeCalcLog()
     closeDivLog()
     PlotLines = Algo(_G.Settings)
     return 31
@@ -1987,6 +2042,7 @@ function _G.OnChangeSettings()
 end
 
 function _G.OnStop()
+    closeCalcLog()
     closeDivLog()
 end
 

@@ -41,8 +41,8 @@ KEYS_ORDER = [
 
 # RPM-up layers are higher than the chart; live packs map 1:1 to these TFs.
 CHART_TF_BY_SMALL = {
-    "Mn20": "M1",
-    "Mn5": "M10",
+    "Mn5": "M1",
+    "Mn20": "M10",
     "H1": "M30",
     "H12": "H4",
 }

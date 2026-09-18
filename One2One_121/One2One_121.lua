@@ -7,7 +7,7 @@
 	  one2oneLib.lua       -> QuikFinam\LuaIndicators\
 
 	??? (Log_Enable=1):
-	  QuikFinam\LuaIndicators\One2One_121.log
+	  QuikFinam\LuaIndicators\logs\One2One_121.log
 ]]
 
 _G.load = _G.loadfile or _G.load
@@ -79,8 +79,8 @@ Settings = {
 	showTp = 1,
 	przExtendBars = 5,
 	enableAlert = 0,
-	Log_Enable = 0,
-	Log_Verbose = 0,
+	Log_Enable = 1,
+	Log_Verbose = 1,
 	LabelShift = 8,
 	ChartId = "",
 	labelFontHeight = 11,
@@ -202,33 +202,38 @@ local function o2oLog(...)
 end
 
 local function initLog(settings)
-	logEnabled = (settings.Log_Enable or 0) == 1
-	logVerbose = (settings.Log_Verbose or 0) == 1
+	logEnabled = true
+	logVerbose = true
 	if not logEnabled then
 		return
 	end
+	if logFile ~= nil then
+		logFile:close()
+		logFile = nil
+		logOpened = false
+	end
+	local logsDir = _G.getWorkingFolder() .. "\\LuaIndicators\\logs"
+	os.execute('mkdir "' .. logsDir .. '" >nul 2>&1')
+	logPath = logsDir .. "\\" .. LOG_FILE_NAME
+	logFile = io.open(logPath, "w")
 	if logFile == nil then
-		logPath = _G.getWorkingFolder() .. "\\LuaIndicators\\" .. LOG_FILE_NAME
-		logFile = io.open(logPath, "a")
+		return
 	end
-	if logFile and not logOpened then
-		logOpened = true
-		o2oLog("=== One2One_121 log session ===")
-		o2oLog("log file:", logPath)
-		o2oLog(
-			"Depth=", settings.Depth,
-			"Deviation=", settings.Deviation,
-			"Backstep=", settings.Backstep,
-			"ratioTolerance=", settings.ratioTolerance,
-			"symmetryTolerance=", settings.symmetryTolerance,
-			"showZZ=", settings.showZZ,
-			"showZZLabel=", settings.showZZLabel,
-			"showEmerging=", settings.showEmerging,
-			"showHistory=", settings.showHistory,
-			"Log_Verbose=", settings.Log_Verbose or 0
-		)
-		message("One2One_121: log -> " .. logPath)
-	end
+	logOpened = true
+	o2oLog("=== One2One_121 log session ===")
+	o2oLog("log file:", logPath)
+	o2oLog(
+		"Depth=", settings.Depth,
+		"Deviation=", settings.Deviation,
+		"Backstep=", settings.Backstep,
+		"ratioTolerance=", settings.ratioTolerance,
+		"symmetryTolerance=", settings.symmetryTolerance,
+		"showZZ=", settings.showZZ,
+		"showZZLabel=", settings.showZZLabel,
+		"showEmerging=", settings.showEmerging,
+		"showHistory=", settings.showHistory,
+		"Log_Verbose=", settings.Log_Verbose or 0
+	)
 end
 
 local function closeLog()
