@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="560" viewBox="0 0 980 560" role="img" aria-label="Classic buy and sell RPM stacks">
+  <style>
+    text { font-family: Segoe UI, Arial, sans-serif; }
+    .title { font-size: 16px; font-weight: 700; }
+    .sub { font-size: 12px; fill: #444; }
+    .lab { font-size: 11px; fill: #333; }
+    .zero { stroke: #88c; stroke-width: 1; }
+    .ema { fill: none; stroke: #d44; stroke-width: 2; }
+    .rpm { fill: none; stroke: #1a8f3a; stroke-width: 2.4; }
+    .ema-up { fill: none; stroke: #d44; stroke-width: 2; }
+    .rpm-up { fill: none; stroke: #c43; stroke-width: 2.4; }
+  </style>
+  <rect width="980" height="560" fill="#f7f7f4"/>
+  <text x="24" y="28" class="title">buy / sell  :;0AA8G5A:89 AB5:</text>
+  <text x="24" y="48" class="sub">small 8 middle >10 =865 =C;O 8 EMA, EMA ?0405B; current B>65 =865 =C;O 8 EMA; hist =865 =C;O 8 @0ABQB 2=87. sell  75@:0;>.</text>
+
+  <text x="70" y="82" class="title" fill="#1a8f3a">buy</text>
+  <text x="560" y="82" class="title" fill="#c43">sell</text>
+
+  <!-- left panes -->
+  <g transform="translate(20,96)">
+    <rect x="0" y="0" width="450" height="100" fill="#fff" stroke="#ddd"/>
+    <text x="8" y="16" class="lab">current</text>
+    <line x1="20" y1="48" x2="430" y2="48" class="zero"/>
+    <path d="M20,42 C120,40 220,44 430,50" class="ema"/>
+    <path d="M20,62 C120,70 220,78 430,88" class="rpm"/>
+    <text x="8" y="94" class="lab">RPM =865 0 8 =865 EMA; EMA =865 0</text>
+  </g>
+  <g transform="translate(20,206)">
+    <rect x="0" y="0" width="450" height="100" fill="#fff" stroke="#ddd"/>
+    <text x="8" y="16" class="lab">small + middle</text>
+    <line x1="20" y1="42" x2="430" y2="42" class="zero"/>
+    <path d="M20,48 C140,52 260,60 430,70" class="ema"/>
+    <path d="M20,58 C140,68 260,80 430,90" class="rpm"/>
+    <text x="8" y="94" class="lab">>10 A;>O =865 0 8 =865 EMA; EMA =865 0, B@5=4 falling</text>
+  </g>
+  <g transform="translate(20,316)">
+    <rect x="0" y="0" width="450" height="200" fill="#fff" stroke="#ddd"/>
+    <text x="8" y="16" class="lab">hist</text>
+    <line x1="20" y1="40" x2="430" y2="40" class="zero"/>
+    <rect x="40" y="40" width="28" height="36" fill="#1a8f3a" opacity="0.75"/>
+    <rect x="90" y="40" width="28" height="52" fill="#1a8f3a" opacity="0.75"/>
+    <rect x="140" y="40" width="28" height="70" fill="#1a8f3a" opacity="0.75"/>
+    <rect x="190" y="40" width="28" height="90" fill="#1a8f3a" opacity="0.75"/>
+    <rect x="240" y="40" width="28" height="110" fill="#1a8f3a" opacity="0.75"/>
+    <rect x="290" y="40" width="28" height="128" fill="#1a8f3a" opacity="0.75"/>
+    <rect x="340" y="40" width="28" height="148" fill="#1a8f3a" opacity="0.75"/>
+    <text x="8" y="188" class="lab">below_0 + hist_growing (AB>;18: C4;8=O5BAO 2=87)</text>
+  </g>
+
+  <!-- right panes -->
+  <g transform="translate(510,96)">
+    <rect x="0" y="0" width="450" height="100" fill="#fff" stroke="#ddd"/>
+    <text x="8" y="16" class="lab">current</text>
+    <line x1="20" y1="52" x2="430" y2="52" class="zero"/>
+    <path d="M20,58 C120,56 220,50 430,46" class="ema-up"/>
+    <path d="M20,40 C120,32 220,24 430,16" class="rpm-up"/>
+    <text x="8" y="94" class="lab">RPM 2KH5 0 8 2KH5 EMA; EMA 2KH5 0</text>
+  </g>
+  <g transform="translate(510,206)">
+    <rect x="0" y="0" width="450" height="100" fill="#fff" stroke="#ddd"/>
+    <text x="8" y="16" class="lab">small + middle</text>
+    <line x1="20" y1="58" x2="430" y2="58" class="zero"/>
+    <path d="M20,52 C140,48 260,40 430,32" class="ema-up"/>
+    <path d="M20,44 C140,36 260,24 430,14" class="rpm-up"/>
+    <text x="8" y="94" class="lab">>10 A;>O 2KH5 0 8 2KH5 EMA; EMA 2KH5 0, B@5=4 rising</text>
+  </g>
+  <g transform="translate(510,316)">
+    <rect x="0" y="0" width="450" height="200" fill="#fff" stroke="#ddd"/>
+    <text x="8" y="16" class="lab">hist</text>
+    <line x1="20" y1="170" x2="430" y2="170" class="zero"/>
+    <rect x="40" y="134" width="28" height="36" fill="#c43" opacity="0.75"/>
+    <rect x="90" y="118" width="28" height="52" fill="#c43" opacity="0.75"/>
+    <rect x="140" y="100" width="28" height="70" fill="#c43" opacity="0.75"/>
+    <rect x="190" y="80" width="28" height="90" fill="#c43" opacity="0.75"/>
+    <rect x="240" y="60" width="28" height="110" fill="#c43" opacity="0.75"/>
+    <rect x="290" y="42" width="28" height="128" fill="#c43" opacity="0.75"/>
+    <rect x="340" y="22" width="28" height="148" fill="#c43" opacity="0.75"/>
+    <text x="8" y="188" class="lab">above_0 + hist_growing (AB>;18: C4;8=O5BAO 225@E)</text>
+  </g>
+</svg>

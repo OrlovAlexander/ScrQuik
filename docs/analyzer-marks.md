@@ -99,14 +99,110 @@ python -m analyzer --sec CNY12.26 --watch
 | жёлто-зелёная | buy2 | под low |
 | сиреневая | sell2 | над high |
 
-**buy** — small и middle: `vs0=below_0` `vs_ema=below_ema` `ema_vs0=below_0` `ema_trend=falling`; current: `vs0=below_0` `vs_ema=below_ema` `ema_vs0=below_0`; hist: `below_0` `hist_growing`.
-**sell** — зеркало: small/middle выше 0 и выше EMA, EMA выше 0 и `rising`; current выше 0 и выше EMA; hist `above_0` `hist_growing`.
-**buy1** — current: `below_0` `below_ema` `slope=rising_below_ema`; small: `above_0` `below_ema` `falling_below_ema` `ema_vs0=above_0` `ema_slope=falling`; middle: `above_0` `above_ema` `falling_above_ema` `ema_vs0=above_0` `ema_slope=falling`; hist: `above_0` `hist_shrinking`.
-**sell1** — зеркало buy1.
-**buy2** — current: `below_0` `below_ema` `ema_vs0=above_0` `ema_trend=falling`; small: `above_0` `above_ema` `ema_vs0=above_0` `ema_trend=rising` `slope=rising_above_ema`; middle: `above_0` `vs_ema=below_ema` `ema_vs0=above_0` `ema_trend=falling`; hist: `above_0` `hist_shrinking`.
-**sell2** — зеркало buy2: middle `below_0` и `vs_ema=above_ema`.
+Порядок проверки: buy, sell, buy1, sell1, buy2, sell2, иначе `none`. Тег, которого нет в таблице сетапа, **не проверяется** (любое значение подходит).
 
-`ema_trend` — наклон EMA за 5 баров, не шаг к предыдущему бару (`ema_slope`).
+### Словарь тегов
+
+| тег | где | описание |
+|---|---|---|
+| `vs0` | current, small, middle | RPM относительно нуля |
+| `vs_ema` | current, small, middle | RPM относительно своей EMA |
+| `slope` | current, small, middle | шаг RPM за 1 бар + сторона EMA |
+| `ema_vs0` | current, small, middle | EMA относительно нуля |
+| `ema_slope` | current, small, middle | шаг EMA за 1 бар |
+| `ema_trend` | current, small, middle | наклон EMA за 5 баров (не путать с `ema_slope`) |
+| `hist_sign` | hist | гистограмма относительно нуля |
+| `hist_dir` | hist | столбик удлиняется от нуля или сжимается к нулю |
+
+| значение | описание |
+|---|---|
+| `below_0` | заметно ниже нуля |
+| `above_0` | заметно выше нуля |
+| `near_0` | у нуля (модуль меньше 0.25 медианы ряда) |
+| `below_ema` | RPM ниже своей EMA |
+| `above_ema` | RPM выше своей EMA |
+| `near_ema` | у EMA (разница меньше 0.15 медианы) |
+| `falling` | вниз |
+| `rising` | вверх |
+| `flat` | шаг меньше 0.08 медианы |
+| `rising_below_ema` | RPM растёт и ниже EMA |
+| `rising_above_ema` | RPM растёт и выше EMA |
+| `falling_below_ema` | RPM падает и ниже EMA |
+| `falling_above_ema` | RPM падает и выше EMA |
+| `hist_growing` | столбик удлиняется от нуля (вниз если hist &lt; 0, вверх если hist &gt; 0) |
+| `hist_shrinking` | столбик короче, к нулю |
+
+Пороги: `NEAR_ZERO=0.25`, `NEAR_EMA=0.15`, `NEAR_SLOPE=0.08`, `NEAR_HIST=0.15`, тренд EMA — 5 баров.
+
+### buy / sell
+
+![buy слева, sell справа: все слои ниже/выше нуля, hist растёт от нуля](images/setup-buy-sell.svg)
+
+| слой | тег | buy | sell | словами |
+|---|---|---|---|---|
+| small | `vs0` | `below_0` | `above_0` | RPM small ниже / выше нуля |
+| small | `vs_ema` | `below_ema` | `above_ema` | RPM small ниже / выше своей EMA |
+| small | `ema_vs0` | `below_0` | `above_0` | EMA small ниже / выше нуля |
+| small | `ema_trend` | `falling` | `rising` | EMA small падает / растёт 5 баров |
+| middle | `vs0` | `below_0` | `above_0` | RPM middle ниже / выше нуля |
+| middle | `vs_ema` | `below_ema` | `above_ema` | RPM middle ниже / выше своей EMA |
+| middle | `ema_vs0` | `below_0` | `above_0` | EMA middle ниже / выше нуля |
+| middle | `ema_trend` | `falling` | `rising` | EMA middle падает / растёт 5 баров |
+| current | `vs0` | `below_0` | `above_0` | RPM current ниже / выше нуля |
+| current | `vs_ema` | `below_ema` | `above_ema` | RPM current ниже / выше своей EMA |
+| current | `ema_vs0` | `below_0` | `above_0` | EMA current ниже / выше нуля |
+| hist | `hist_sign` | `below_0` | `above_0` | гистограмма ниже / выше нуля |
+| hist | `hist_dir` | `hist_growing` | `hist_growing` | столбик удлиняется от нуля |
+
+Наклон самих small/middle (`slope`) в классическом стеке не входит.
+
+### buy1 / sell1
+
+Кросс как M10 25.08.2026 17:20.
+
+![buy1 слева, sell1 справа: current разворачивается, старшие слои ещё с той стороны, hist сжимается](images/setup-buy1-sell1.svg)
+
+| слой | тег | buy1 | sell1 | словами |
+|---|---|---|---|---|
+| current | `vs0` | `below_0` | `above_0` | current уже ниже / выше нуля |
+| current | `vs_ema` | `below_ema` | `above_ema` | current ниже / выше своей EMA |
+| current | `slope` | `rising_below_ema` | `falling_above_ema` | current разворачивается вверх снизу / вниз сверху |
+| small | `vs0` | `above_0` | `below_0` | small ещё выше / ниже нуля |
+| small | `vs_ema` | `below_ema` | `above_ema` | small уже ниже / выше своей EMA |
+| small | `slope` | `falling_below_ema` | `rising_above_ema` | small падает под EMA / растёт над EMA |
+| small | `ema_vs0` | `above_0` | `below_0` | EMA small ещё выше / ниже нуля |
+| small | `ema_slope` | `falling` | `rising` | EMA small падает / растёт (1 бар) |
+| middle | `vs0` | `above_0` | `below_0` | middle ещё выше / ниже нуля |
+| middle | `vs_ema` | `above_ema` | `below_ema` | middle ещё выше / ниже своей EMA |
+| middle | `slope` | `falling_above_ema` | `rising_below_ema` | middle падает над EMA / растёт под EMA |
+| middle | `ema_vs0` | `above_0` | `below_0` | EMA middle ещё выше / ниже нуля |
+| middle | `ema_slope` | `falling` | `rising` | EMA middle падает / растёт (1 бар) |
+| hist | `hist_sign` | `above_0` | `below_0` | hist ещё выше / ниже нуля |
+| hist | `hist_dir` | `hist_shrinking` | `hist_shrinking` | столбик сжимается к нулю |
+
+### buy2 / sell2
+
+Как Si M1 22.09.2026 18:55. Наклон middle и 1-бар current не входят.
+
+![buy2 слева, sell2 справа: current под нулём при EMA над нулём, small растёт, middle ниже своей EMA](images/setup-buy2-sell2.svg)
+
+| слой | тег | buy2 | sell2 | словами |
+|---|---|---|---|---|
+| current | `vs0` | `below_0` | `above_0` | current ниже / выше нуля |
+| current | `vs_ema` | `below_ema` | `above_ema` | current ниже / выше своей EMA |
+| current | `ema_vs0` | `above_0` | `below_0` | EMA current ещё выше / уже ниже нуля |
+| current | `ema_trend` | `falling` | `rising` | EMA current падает / растёт 5 баров |
+| small | `vs0` | `above_0` | `below_0` | small выше / ниже нуля |
+| small | `vs_ema` | `above_ema` | `below_ema` | small выше / ниже своей EMA |
+| small | `ema_vs0` | `above_0` | `below_0` | EMA small выше / ниже нуля |
+| small | `ema_trend` | `rising` | `falling` | EMA small растёт / падает 5 баров |
+| small | `slope` | `rising_above_ema` | `falling_below_ema` | small растёт над EMA / падает под EMA |
+| middle | `vs0` | `above_0` | `below_0` | middle выше / ниже нуля |
+| middle | `vs_ema` | `below_ema` | `above_ema` | middle **ниже** своей EMA / **выше** своей EMA |
+| middle | `ema_vs0` | `above_0` | `below_0` | EMA middle выше / ниже нуля |
+| middle | `ema_trend` | `falling` | `rising` | EMA middle падает / растёт 5 баров |
+| hist | `hist_sign` | `above_0` | `below_0` | hist выше / ниже нуля |
+| hist | `hist_dir` | `hist_shrinking` | `hist_shrinking` | столбик сжимается к нулю |
 
 ## Задержка
 
