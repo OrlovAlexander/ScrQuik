@@ -18,11 +18,11 @@
 <path d="M40,254 C180,268 320,280 450,294" fill="none" stroke="#0a8aa8" stroke-width="2.8"/>
 <text x="28" y="316" font-family="Arial" font-size="11" fill="#333333">above 0, below EMA, falling</text>
 <rect x="20" y="336" width="450" height="110" fill="#ffffff" stroke="#dddddd"/>
-<text x="28" y="352" font-family="Arial" font-size="11" fill="#333333">middle - falling_above_ema</text>
+<text x="28" y="352" font-family="Arial" font-size="11" fill="#333333">middle - flat or falling_above_ema</text>
 <line x1="40" y1="414" x2="450" y2="414" stroke="#8888cc" stroke-width="1" fill="none"/>
 <path d="M40,388 C180,392 320,396 450,400" fill="none" stroke="#666666" stroke-width="1.5" stroke-dasharray="7 4"/>
 <path d="M40,358 C180,368 320,380 450,392" fill="none" stroke="#0a8aa8" stroke-width="2.8"/>
-<text x="28" y="436" font-family="Arial" font-size="11" fill="#333333">above 0, above EMA, falling</text>
+<text x="28" y="436" font-family="Arial" font-size="11" fill="#333333">above 0, above EMA, not rising</text>
 <rect x="20" y="456" width="450" height="140" fill="#ffffff" stroke="#dddddd"/>
 <text x="28" y="472" font-family="Arial" font-size="11" fill="#333333">hist - above_0 hist_shrinking</text>
 <line x1="40" y1="574" x2="450" y2="574" stroke="#8888cc" stroke-width="1" fill="none"/>
@@ -46,11 +46,11 @@
 <path d="M530,290 C670,276 810,264 940,250" fill="none" stroke="#dd8800" stroke-width="2.8"/>
 <text x="518" y="316" font-family="Arial" font-size="11" fill="#333333">below 0, above EMA, rising</text>
 <rect x="510" y="336" width="450" height="110" fill="#ffffff" stroke="#dddddd"/>
-<text x="518" y="352" font-family="Arial" font-size="11" fill="#333333">middle - rising_below_ema</text>
+<text x="518" y="352" font-family="Arial" font-size="11" fill="#333333">middle - flat or rising_below_ema</text>
 <line x1="530" y1="370" x2="940" y2="370" stroke="#8888cc" stroke-width="1" fill="none"/>
 <path d="M530,394 C670,390 810,386 940,382" fill="none" stroke="#666666" stroke-width="1.5" stroke-dasharray="7 4"/>
 <path d="M530,424 C670,414 810,402 940,390" fill="none" stroke="#dd8800" stroke-width="2.8"/>
-<text x="518" y="436" font-family="Arial" font-size="11" fill="#333333">below 0, below EMA, rising</text>
+<text x="518" y="436" font-family="Arial" font-size="11" fill="#333333">below 0, below EMA, not falling</text>
 <rect x="510" y="456" width="450" height="140" fill="#ffffff" stroke="#dddddd"/>
 <text x="518" y="472" font-family="Arial" font-size="11" fill="#333333">hist - below_0 hist_shrinking</text>
 <line x1="530" y1="484" x2="940" y2="484" stroke="#8888cc" stroke-width="1" fill="none"/>

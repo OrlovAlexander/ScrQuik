@@ -408,6 +408,24 @@ class ComboTests(unittest.TestCase):
                 buy["hist"],
                 buy["current"],
             ),
+            "buy1",
+        )
+        self.assertEqual(
+            setup_signal(
+                sell["small"],
+                dict(sell["middle"], slope="flat_below_ema", ema_slope="flat"),
+                sell["hist"],
+                sell["current"],
+            ),
+            "sell1",
+        )
+        self.assertEqual(
+            setup_signal(
+                buy["small"],
+                dict(buy["middle"], slope="rising_above_ema", ema_slope="rising"),
+                buy["hist"],
+                buy["current"],
+            ),
             "none",
         )
 

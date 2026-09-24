@@ -56,10 +56,10 @@ python -m analyzer --watch --sec CNY12.26
 Порядок в `setup_signal`: buy, sell, buy1, sell1, buy2, sell2, иначе `none`.
 
 - **buy / sell** — классический стек small+middle+current+hist.
-- **buy1 / sell1** — кросс как M10 25.08.2026 17:20.
+- **buy1 / sell1** — кросс как M10 25.08.2026 17:20; middle ещё с той стороны, наклон `flat` или против тренда (не только `falling`/`rising`).
 - **buy2 / sell2** — как Si M1 22.09.2026 18:55 (middle относительно своей EMA: buy2 ниже EMA, sell2 выше).
 
-Полные теги — в [analyzer-marks.md](analyzer-marks.md).
+Полные теги и счётчик появлений по истории — в [analyzer-marks.md](analyzer-marks.md).
 
 ## Свечи
 

@@ -28,7 +28,14 @@ PERIOD_MIN = {"M1": 1, "M10": 10, "M30": 30, "H4": 240}
 def _tags_match(pack: dict | None, **expect) -> bool:
     if not pack:
         return False
-    return all(pack.get(key) == value for key, value in expect.items())
+    for key, value in expect.items():
+        got = pack.get(key)
+        if isinstance(value, (tuple, frozenset, set, list)):
+            if got not in value:
+                return False
+        elif got != value:
+            return False
+    return True
 
 
 def _buy_stack(small: dict, middle: dict, hist: dict, current: dict | None = None) -> bool:
@@ -63,7 +70,7 @@ def _sell_stack(small: dict, middle: dict, hist: dict, current: dict | None = No
 
 def _buy_m10_cross(current: dict | None, small: dict, middle: dict, hist: dict) -> bool:
     """M10 2026-08-25 17:20: current below 0 rising, small above 0 below EMA falling,
-    middle above 0 above EMA falling, hist above 0 shrinking.
+    middle above 0 above EMA not rising, hist above 0 shrinking.
     """
     return (
         _tags_match(current, vs0="below_0", vs_ema="below_ema", slope="rising_below_ema")
@@ -79,9 +86,9 @@ def _buy_m10_cross(current: dict | None, small: dict, middle: dict, hist: dict) 
             middle,
             vs0="above_0",
             vs_ema="above_ema",
-            slope="falling_above_ema",
+            slope=("flat_above_ema", "falling_above_ema"),
             ema_vs0="above_0",
-            ema_slope="falling",
+            ema_slope=("flat", "falling"),
         )
         and _tags_match(hist, hist_sign="above_0", hist_dir="hist_shrinking")
     )
@@ -164,9 +171,9 @@ def _sell_m10_cross(current: dict | None, small: dict, middle: dict, hist: dict)
             middle,
             vs0="below_0",
             vs_ema="below_ema",
-            slope="rising_below_ema",
+            slope=("flat_below_ema", "rising_below_ema"),
             ema_vs0="below_0",
-            ema_slope="rising",
+            ema_slope=("flat", "rising"),
         )
         and _tags_match(hist, hist_sign="below_0", hist_dir="hist_shrinking")
     )

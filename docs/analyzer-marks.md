@@ -129,6 +129,8 @@ python -m analyzer --sec CNY12.26 --watch
 | `rising_above_ema` | RPM растёт и выше EMA |
 | `falling_below_ema` | RPM падает и ниже EMA |
 | `falling_above_ema` | RPM падает и выше EMA |
+| `flat_below_ema` | RPM почти не меняется и ниже EMA |
+| `flat_above_ema` | RPM почти не меняется и выше EMA |
 | `hist_growing` | столбик удлиняется от нуля (вниз если hist &lt; 0, вверх если hist &gt; 0) |
 | `hist_shrinking` | столбик короче, к нулю |
 
@@ -158,7 +160,7 @@ python -m analyzer --sec CNY12.26 --watch
 
 ### buy1 / sell1
 
-Кросс как M10 25.08.2026 17:20.
+Кросс как M10 25.08.2026 17:20. Middle ещё с той стороны, откуда уходит current. Наклон middle: buy1 — `flat` или `falling`, sell1 — `flat` или `rising`. На эталоне было `flat_above_ema` / `ema_slope=flat`. Только `falling` без `flat` эталон не проходит и в истории даёт 0.
 
 ![buy1 слева, sell1 справа: current разворачивается, старшие слои ещё с той стороны, hist сжимается](images/setup-buy1-sell1.svg)
 
@@ -174,9 +176,9 @@ python -m analyzer --sec CNY12.26 --watch
 | small | `ema_slope` | `falling` | `rising` | EMA small падает / растёт (1 бар) |
 | middle | `vs0` | `above_0` | `below_0` | middle ещё выше / ниже нуля |
 | middle | `vs_ema` | `above_ema` | `below_ema` | middle ещё выше / ниже своей EMA |
-| middle | `slope` | `falling_above_ema` | `rising_below_ema` | middle падает над EMA / растёт под EMA |
+| middle | `slope` | `flat_above_ema` или `falling_above_ema` | `flat_below_ema` или `rising_below_ema` | middle над EMA не растёт / под EMA не падает |
 | middle | `ema_vs0` | `above_0` | `below_0` | EMA middle ещё выше / ниже нуля |
-| middle | `ema_slope` | `falling` | `rising` | EMA middle падает / растёт (1 бар) |
+| middle | `ema_slope` | `flat` или `falling` | `flat` или `rising` | EMA middle не растёт / не падает (1 бар) |
 | hist | `hist_sign` | `above_0` | `below_0` | hist ещё выше / ниже нуля |
 | hist | `hist_dir` | `hist_shrinking` | `hist_shrinking` | столбик сжимается к нулю |
 
@@ -203,6 +205,21 @@ python -m analyzer --sec CNY12.26 --watch
 | middle | `ema_trend` | `falling` | `rising` | EMA middle падает / растёт 5 баров |
 | hist | `hist_sign` | `above_0` | `below_0` | hist выше / ниже нуля |
 | hist | `hist_dir` | `hist_shrinking` | `hist_shrinking` | столбик сжимается к нулю |
+
+## Как часто в истории
+
+Onset (первая свеча серии, как `OnsetOnly=1`) по полным CSV M1 и M10, **52** инструмента barsSaver. RPM считается со второй половины каждого файла (`floor(n/2)+1`), как Lua. Крайние даты в файлах: 09.01.2026 — 24.09.2026 21:45. Не окно меток 6000/2000.
+
+| сетап | M1 | M10 | всего | доля |
+|---|---:|---:|---:|---:|
+| buy | 2 669 | 1 324 | 3 993 | 46.4% |
+| sell | 2 519 | 1 458 | 3 977 | 46.2% |
+| buy1 | 105 | 66 | 171 | 2.0% |
+| sell1 | 119 | 46 | 165 | 1.9% |
+| buy2 | 132 | 0 | 132 | 1.5% |
+| sell2 | 171 | 0 | 171 | 2.0% |
+
+Всего 8 609 появлений. buy2/sell2 только на M1. buy1 — 48 тикеров, sell1 — 45. Классика buy/sell — на всех 52.
 
 ## Задержка
 

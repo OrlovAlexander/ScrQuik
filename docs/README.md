@@ -3,7 +3,7 @@
 | документ | о чём |
 |---|---|
 | [python-analyzer.md](python-analyzer.md) | Python-анализатор: модули, CLI, тесты |
-| [analyzer-marks.md](analyzer-marks.md) | метки на графике: barsSaver, `--watch`, `*AnalyzerMarks`, сетапы |
+| [analyzer-marks.md](analyzer-marks.md) | метки на графике: barsSaver, `--watch`, `*AnalyzerMarks`, теги сетапов, частота в истории |
 | [barsSaver.md](barsSaver.md) | установка и отличия от апстрима nick-nh |
 | [barsSaver upstream](https://github.com/nick-nh/qlua/tree/master/barsSaver) | исходный скрипт выгрузки свечей |
 | [rpm-tf-up-5/](rpm-tf-up-5/) | дивергенции `*RPM_TF_Up_5` |
