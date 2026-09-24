@@ -11,6 +11,7 @@ import urllib.parse
 import urllib.request
 from collections import Counter
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 FIB_AB_MIN = 0.25
@@ -825,9 +826,8 @@ def main():
         "summary": summarize(signals),
         "signals": signals,
     }
-    out_path = (
-        f"C:\\Users\\koaln\\RiderProjects\\ScrQuik\\One2One_121\\tools\\"
-        f"move_stats_{args.sec}_{args.tf}m.json"
+    out_path = str(
+        Path(__file__).resolve().parent / f"move_stats_{args.sec}_{args.tf}m.json"
     )
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)

@@ -1,4 +1,4 @@
-# Third-party clone — keep local, do not publish
+# Third-party clone: keep local, do not publish
 srcGitHub/
 
 # IDE / user-specific
@@ -25,8 +25,9 @@ obj/
 *.key
 
 # Generated research caches
-One2One_121/tools/cache_*.json
-One2One_121/tools/move_stats_*.json
+tools/one2one/cache_*.json
+tools/one2one/move_stats_*.json
+analyzer_marks/
 
 # Vendor QUIK manuals (PDFs and extracted text)
 docs/*.pdf

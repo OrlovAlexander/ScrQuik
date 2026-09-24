@@ -212,9 +212,14 @@ local function initLog(settings)
 		logFile = nil
 		logOpened = false
 	end
-	local logsDir = _G.getWorkingFolder() .. "\\LuaIndicators\\logs"
-	os.execute('mkdir "' .. logsDir .. '" >nul 2>&1')
-	logPath = logsDir .. "\\" .. LOG_FILE_NAME
+	local logsDirPath = _G.getWorkingFolder() .. "\\LuaIndicators\\logs"
+	local probe = io.open(logsDirPath .. "\\._dir", "a")
+	if probe ~= nil then
+		probe:close()
+	else
+		os.execute('mkdir "' .. logsDirPath .. '" >nul 2>&1')
+	end
+	logPath = logsDirPath .. "\\" .. LOG_FILE_NAME
 	logFile = io.open(logPath, "w")
 	if logFile == nil then
 		return

@@ -9,7 +9,7 @@ from pathlib import Path
 from analyzer.bars import Bar
 from analyzer.settings import One2OneSettings, load_one2one_settings
 
-_TOOLS = Path(__file__).resolve().parents[1] / "One2One_121" / "tools"
+_TOOLS = Path(__file__).resolve().parents[1] / "tools" / "one2one"
 if str(_TOOLS) not in sys.path:
     sys.path.insert(0, str(_TOOLS))
 
@@ -94,3 +94,41 @@ def current_pattern(
         "deviation": st.deviation,
         "backstep": st.backstep,
     }
+
+
+def pattern_events(
+    bars: list[Bar],
+    price_step: float | None = None,
+    settings: One2OneSettings | None = None,
+) -> list[dict | None]:
+    """Tag the bar where a 121 D is first confirmed. Later bars stay None until D changes."""
+    n = len(bars)
+    out: list[dict | None] = [None] * n
+    if n < 20:
+        return out
+    st = settings or load_one2one_settings()
+    step = price_step if price_step is not None else infer_step(bars)
+    candles = _to_candles(bars)
+    engine = ZigZagEngine(step)
+    seen: set[int] = set()
+    for i in range(1, n + 1):
+        zz, ready = engine.update(
+            i, st.depth, st.deviation, st.backstep, size=i, candle=candles[i]
+        )
+        if not ready or len(zz) < 5:
+            continue
+        patterns = scan_patterns(list(zz), st.ratio_tol, st.sym_tol, history_depth=1)
+        if not patterns:
+            continue
+        pat = patterns[0]
+        d_i = pat["points"]["D"]["index"]
+        if d_i in seen:
+            continue
+        seen.add(d_i)
+        out[i - 1] = {
+            "direction": pat["info"]["direction"],
+            "ab": pat["info"]["ab_ratio"],
+            "cd": pat["info"]["cd_ratio"],
+            "d_index": d_i,
+        }
+    return out

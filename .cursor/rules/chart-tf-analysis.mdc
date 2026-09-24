@@ -19,7 +19,7 @@ alwaysApply: true
 ## RPM-up
 
 - Настройки общие для всех инструментов (не привязывать к sec_code).
-- Брать из `RPM_TF_Up_5.ini`, секция по ТФ **графика**:
+- Брать из `config/RPM_TF_Up_5.ini`, секция по ТФ **графика**:
   - M1: `[RPM_TF_Up_5.M1]` — Mn5 / Mn10 / Mn20
   - M10: `[RPM_TF_Up_5.M10]` — Mn20 / Mn30 / H2
   - M30: `[RPM_TF_Up_5.M30]` — H1 / H2 / H4

@@ -5,8 +5,9 @@ import struct
 from collections import defaultdict
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
 WND = Path(r"C:\QuikFinam\finam.wnd")
-OUT = Path(r"C:\Users\koaln\RiderProjects\ScrQuik\RPM_TF_Up_5.ini")
+OUT = REPO_ROOT / "config" / "RPM_TF_Up_5.ini"
 
 KEYS_ORDER = [
     "Name",

@@ -18,12 +18,19 @@ def fir_typical(bars: list[Bar], i: int) -> float:
     return acc / 12.0
 
 
+def half_history_start(n: int) -> int:
+    """0-based first bar of the second half; matches Lua floor(Size/2)+1."""
+    if n < 2:
+        return 0
+    return n // 2
+
+
 def compute_current(bars: list[Bar], period: int = CURRENT_PERIOD) -> list[dict]:
     ema = Ema(period)
     out: list[dict] = []
+    start = half_history_start(len(bars))
     for i, bar in enumerate(bars):
-        if i == 0:
-            ema.reset()
+        if i == 0 or i < start:
             out.append({"dt": bar.dt, "rpm": None, "ema": None})
             continue
         rpm = fir_typical(bars, i)

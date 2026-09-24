@@ -3,6 +3,8 @@ _G.load   = _G.loadfile or _G.load
 local maLib = load(_G.getWorkingFolder().."\\Luaindicators\\maLib.lua")()
 
 local logFile = nil
+-- Disk log on every bar stalls QUIK. Set true only to debug (also needs Div_Log=1).
+local ENABLE_FILE_LOG = false
 
 local message               = _G['message']
 local number                = _G['number']
@@ -67,7 +69,7 @@ _G.Settings= {
     ["Div_PivotSpanMax"]    = 1,
     ["Div_DrawHidden"]      = 1,
     ["Div_DrawWeak"]        = 1,
-    ["Div_Log"]             = 1,
+    ["Div_Log"]             = 0,
     ["1_Small_LabelDraw"]   = 1,
     ["2_Middle_LabelDraw"]   = 0,
     ["3_Up_LabelDraw"]      = 0,
@@ -313,14 +315,28 @@ local function instrumentHeader()
     return classCode, secCode, interval, nBars
 end
 
+local logsDirCached = nil
+
 local function logsDir()
+    if logsDirCached ~= nil then
+        return logsDirCached
+    end
     local dir = _G.getWorkingFolder().."\\LuaIndicators\\logs"
-    os.execute('mkdir "'..dir..'" >nul 2>&1')
+    local probe = io.open(dir.."\\._dir", "a")
+    if probe ~= nil then
+        probe:close()
+    else
+        os.execute('mkdir "'..dir..'" >nul 2>&1')
+    end
+    logsDirCached = dir
     return dir
 end
 
 local function reopenCalcLog()
     closeCalcLog()
+    if not ENABLE_FILE_LOG then
+        return
+    end
     local tf = chartTfTag()
     logFile = io.open(logsDir().."\\RPM_TF_Up_5."..tf..".txt", "w")
     if logFile == nil then
@@ -410,6 +426,13 @@ local function initDivLog(settings)
         divLogFile:close()
         divLogFile = nil
         divLogOpened = false
+    end
+    divLogEnabled = false
+    if not ENABLE_FILE_LOG then
+        return
+    end
+    if getSetting(settings or {}, "Div_Log", 0) ~= 1 then
+        return
     end
     divLogEnabled = true
     local tf = chartTfTag()

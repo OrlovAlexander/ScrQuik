@@ -4,6 +4,8 @@ local maLib = load(_G.getWorkingFolder().."\\Luaindicators\\maLib.lua")()
 
 local logFile = nil
 local LOG_PATH = nil
+-- Disk log on every bar stalls QUIK. Set true only to debug.
+local ENABLE_FILE_LOG = false
 
 local message       = _G['message']
 local RGB           = _G['RGB']
@@ -94,14 +96,28 @@ local function instrumentHeader()
     return classCode, secCode, interval, nBars
 end
 
+local logsDirCached = nil
+
 local function logsDir()
+    if logsDirCached ~= nil then
+        return logsDirCached
+    end
     local dir = _G.getWorkingFolder().."\\LuaIndicators\\logs"
-    os.execute('mkdir "'..dir..'" >nul 2>&1')
+    local probe = io.open(dir.."\\._dir", "a")
+    if probe ~= nil then
+        probe:close()
+    else
+        os.execute('mkdir "'..dir..'" >nul 2>&1')
+    end
+    logsDirCached = dir
     return dir
 end
 
 local function reopenLog()
     closeLog()
+    if not ENABLE_FILE_LOG then
+        return
+    end
     local tf = chartTfTag()
     LOG_PATH = logsDir().."\\RPM_TF_Current."..tf..".txt"
     logFile = io.open(LOG_PATH, "w")
@@ -113,6 +129,14 @@ local function reopenLog()
     myLog("INSTR", classCode, secCode, "tf=", tf, "interval=", interval, "bars=", nBars)
 end
 
+
+local function halfHistoryStart()
+    local n = _G.Size and _G.Size() or 0
+    if n < 2 then
+        return 1
+    end
+    return math.floor(n / 2) + 1
+end
 
 local function Algo(Fsettings, ds)
 
@@ -144,6 +168,12 @@ local function Algo(Fsettings, ds)
                 reopenLog()
                 myLog("fRpm == nil or index == 1")
                 fRpm = maLib.new({method = 'RPMTFC', period = period}, ds)
+                if index == 1 then
+                    return
+                end
+            end
+
+            if index < halfHistoryStart() then
                 return
             end
 

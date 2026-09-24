@@ -5,8 +5,10 @@ import configparser
 from dataclasses import dataclass
 from pathlib import Path
 
-INI_PATH = Path(r"C:\Users\koaln\RiderProjects\ScrQuik\RPM_TF_Up_5.ini")
-O2O_INI = Path(r"C:\Users\koaln\RiderProjects\ScrQuik\One2One_121.ini")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CONFIG_DIR = REPO_ROOT / "config"
+INI_PATH = CONFIG_DIR / "RPM_TF_Up_5.ini"
+O2O_INI = CONFIG_DIR / "One2One_121.ini"
 
 
 @dataclass(slots=True)
@@ -34,6 +36,15 @@ class UpSettings:
     div_pivot_span_max: int
     div_draw_hidden: int
     div_draw_weak: int
+
+
+def hist_layer_names(settings: UpSettings) -> tuple[str, ...]:
+    """Layers with HistDraw=1 on the live chart (not always the named Up slot)."""
+    return tuple(
+        name
+        for name in ("small", "middle", "up")
+        if getattr(settings, name).hist_draw == 1
+    )
 
 
 def _i(section, key: str, default: int = 0) -> int:

@@ -367,6 +367,7 @@ def _step_layer(
     half_start: int,
     size: int,
     div_cfg: UpSettings,
+    track_divs: bool = True,
 ) -> dict:
     st = layer.settings
     empty = {
@@ -398,26 +399,26 @@ def _step_layer(
     slow_v = layer.ema_slow.update(rpm) if layer.ema_slow else 0.0
     hist = (ema_v - slow_v) * 5.0
     hist_up = hist_dw = None
-    if st.hist_draw == 1 and layer.hist_prev is not None:
+    if layer.hist_prev is not None:
         if hist > layer.hist_prev:
             hist_up = hist
         else:
             hist_dw = hist
     layer.hist_prev = hist
-    if st.div_draw == 1 or st.label_draw == 1:
+    if track_divs and (st.div_draw == 1 or st.label_draw == 1):
         _track(layer, lua_index, n, rpm, bar.h, bar.l, div_cfg.div_segs_max)
     return {
-        "rpm": rpm if st.draw == 1 else None,
-        "ema": ema_v if st.draw == 1 else None,
+        "rpm": rpm,
+        "ema": ema_v,
         "hist_up": hist_up,
         "hist_dw": hist_dw,
         "agg_n": n,
         "tf": st.tf,
-        "hist": hist if st.hist_draw == 1 else None,
+        "hist": hist,
     }
 
 
-def compute_up(bars: list[Bar], settings: UpSettings) -> dict:
+def compute_up(bars: list[Bar], settings: UpSettings, track_divs: bool = True) -> dict:
     size = len(bars)
     half_start = floor(size / 2) + 1
     small = LayerRuntime(settings.small, AggSeries(settings.small.tf))
@@ -431,9 +432,9 @@ def compute_up(bars: list[Bar], settings: UpSettings) -> dict:
             small.reset()
             middle.reset()
             up.reset()
-        last_s = _step_layer(small, lua_i, bar, half_start, size, settings)
-        last_m = _step_layer(middle, lua_i, bar, half_start, size, settings)
-        last_u = _step_layer(up, lua_i, bar, half_start, size, settings)
+        last_s = _step_layer(small, lua_i, bar, half_start, size, settings, track_divs)
+        last_m = _step_layer(middle, lua_i, bar, half_start, size, settings, track_divs)
+        last_u = _step_layer(up, lua_i, bar, half_start, size, settings, track_divs)
         series.append({"dt": bar.dt, "small": last_s, "middle": last_m, "up": last_u})
 
     def _divs(layer: LayerRuntime) -> list[dict]:

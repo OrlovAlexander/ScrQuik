@@ -4,7 +4,7 @@
 
 ### Добавлено
 
-- Файл `RPM_TF_Up_5.lua` на базе v4
+- Файл `lua/RPM_TF_Up_5.lua` на базе v4
 - 12 линий дивергенций (4×3 слоя), TYPE_DASH
 - Segment-based pivot detector для ступенчатых RPM
 - Настройки `1_Small_DivDraw`, `2_Midle_DivDraw`, `3_Up_DivDraw` (default 0)

@@ -1,6 +1,6 @@
 ﻿# Классификация дивергенций
 
-Материал из чата (BCS, TradingView, Finam, Alfa и др.) и соответствие полям в `RPM_TF_Up_5.lua`.
+Материал из чата (BCS, TradingView, Finam, Alfa и др.) и соответствие полям в `lua/RPM_TF_Up_5.lua`.
 
 ---
 

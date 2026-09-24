@@ -32,11 +32,13 @@ Pivot'ы ищутся по сегментам агрегированных TF; �
 
 ## Установка
 
-1. Скопировать `RPM_TF_Up_5.lua` → `C:\QuikFinam\LuaIndicators\`
-2. Убедиться, что `maLib.lua` в `C:\QuikFinam\Luaindicators\`
+1. Скопировать `lua/RPM_TF_Up_5.lua` → `C:\QuikFinam\LuaIndicators\`
+2. Убедиться, что `lua/maLib.lua` лежит в `C:\QuikFinam\LuaIndicators\`
 3. Добавить индикатор `*RPM_TF_Up_5` на график
 4. Включить нужные `*_DivDraw`
-5. Перезагрузить индикатор после обновления файла
+5. Снять и навесить индикатор после обновления файла
+
+На живом графике параметры слоёв (TF / Period / Draw / HistDraw) берутся из окна QUIK, не из `config/RPM_TF_Up_5.ini`. Ini нужен Python-анализатору; его можно обновить скриптом `tools/one2one/extract_rpm_up_ini.py` из `finam.wnd`.
 
 ---
 
@@ -52,7 +54,7 @@ Pivot'ы ищутся по сегментам агрегированных TF; �
 
 ## Подстройка порогов
 
-В начале блока дивергенций в `RPM_TF_Up_5.lua`:
+В начале блока дивергенций в `lua/RPM_TF_Up_5.lua`:
 
 ```lua
 DIV_EXTENDED_PCT   = 0.003   -- тип II: «двойная вершина/дно»
