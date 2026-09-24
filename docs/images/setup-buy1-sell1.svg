@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="980" height="620" viewBox="0 0 980 620">
-<rect width="980" height="620" fill="#f7f7f4"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="640" viewBox="0 0 980 640">
+<rect width="980" height="640" fill="#f7f7f4"/>
 <text x="24" y="28" font-family="Arial" font-size="16" fill="#111111" font-weight="bold">buy1 / sell1 - cross (M10 17:20)</text>
 <text x="24" y="48" font-family="Arial" font-size="12" fill="#444444">current below 0 turning up; small/middle still above 0 but falling; hist shrinking.</text>
 <text x="70" y="82" font-family="Arial" font-size="16" fill="#0a8aa8" font-weight="bold">buy1</text>
@@ -8,20 +8,20 @@
 <rect x="20" y="96" width="450" height="110" fill="#ffffff" stroke="#dddddd"/>
 <text x="28" y="112" font-family="Arial" font-size="11" fill="#333333">current - rising_below_ema</text>
 <line x1="40" y1="138" x2="450" y2="138" stroke="#8888cc" stroke-width="1" fill="none"/>
-<path d="M40,154 C180,158 300,160 450,162" fill="none" stroke="#dd4444" stroke-width="2"/>
-<path d="M40,188 C160,182 300,168 450,148" fill="none" stroke="#0a8aa8" stroke-width="2.4"/>
+<path d="M40,154 C180,158 300,160 450,162" fill="none" stroke="#666666" stroke-width="1.5" stroke-dasharray="7 4"/>
+<path d="M40,188 C160,182 300,168 450,148" fill="none" stroke="#0a8aa8" stroke-width="2.8"/>
 <text x="28" y="196" font-family="Arial" font-size="11" fill="#333333">below 0, below EMA, rising</text>
 <rect x="20" y="216" width="450" height="110" fill="#ffffff" stroke="#dddddd"/>
 <text x="28" y="232" font-family="Arial" font-size="11" fill="#333333">small - falling_below_ema</text>
 <line x1="40" y1="286" x2="450" y2="286" stroke="#8888cc" stroke-width="1" fill="none"/>
-<path d="M40,244 C180,252 320,262 450,270" fill="none" stroke="#dd4444" stroke-width="2"/>
-<path d="M40,254 C180,268 320,280 450,294" fill="none" stroke="#0a8aa8" stroke-width="2.4"/>
+<path d="M40,244 C180,252 320,262 450,270" fill="none" stroke="#666666" stroke-width="1.5" stroke-dasharray="7 4"/>
+<path d="M40,254 C180,268 320,280 450,294" fill="none" stroke="#0a8aa8" stroke-width="2.8"/>
 <text x="28" y="316" font-family="Arial" font-size="11" fill="#333333">above 0, below EMA, falling</text>
 <rect x="20" y="336" width="450" height="110" fill="#ffffff" stroke="#dddddd"/>
 <text x="28" y="352" font-family="Arial" font-size="11" fill="#333333">middle - falling_above_ema</text>
 <line x1="40" y1="414" x2="450" y2="414" stroke="#8888cc" stroke-width="1" fill="none"/>
-<path d="M40,388 C180,392 320,396 450,400" fill="none" stroke="#dd4444" stroke-width="2"/>
-<path d="M40,358 C180,368 320,380 450,392" fill="none" stroke="#0a8aa8" stroke-width="2.4"/>
+<path d="M40,388 C180,392 320,396 450,400" fill="none" stroke="#666666" stroke-width="1.5" stroke-dasharray="7 4"/>
+<path d="M40,358 C180,368 320,380 450,392" fill="none" stroke="#0a8aa8" stroke-width="2.8"/>
 <text x="28" y="436" font-family="Arial" font-size="11" fill="#333333">above 0, above EMA, falling</text>
 <rect x="20" y="456" width="450" height="140" fill="#ffffff" stroke="#dddddd"/>
 <text x="28" y="472" font-family="Arial" font-size="11" fill="#333333">hist - above_0 hist_shrinking</text>
@@ -36,20 +36,20 @@
 <rect x="510" y="96" width="450" height="110" fill="#ffffff" stroke="#dddddd"/>
 <text x="518" y="112" font-family="Arial" font-size="11" fill="#333333">current - falling_above_ema</text>
 <line x1="530" y1="166" x2="940" y2="166" stroke="#8888cc" stroke-width="1" fill="none"/>
-<path d="M530,148 C670,146 790,144 940,142" fill="none" stroke="#dd4444" stroke-width="2"/>
-<path d="M530,118 C650,124 790,138 940,156" fill="none" stroke="#dd8800" stroke-width="2.4"/>
+<path d="M530,148 C670,146 790,144 940,142" fill="none" stroke="#666666" stroke-width="1.5" stroke-dasharray="7 4"/>
+<path d="M530,118 C650,124 790,138 940,156" fill="none" stroke="#dd8800" stroke-width="2.8"/>
 <text x="518" y="196" font-family="Arial" font-size="11" fill="#333333">above 0, above EMA, falling</text>
 <rect x="510" y="216" width="450" height="110" fill="#ffffff" stroke="#dddddd"/>
 <text x="518" y="232" font-family="Arial" font-size="11" fill="#333333">small - rising_above_ema</text>
 <line x1="530" y1="258" x2="940" y2="258" stroke="#8888cc" stroke-width="1" fill="none"/>
-<path d="M530,298 C670,290 810,280 940,272" fill="none" stroke="#dd4444" stroke-width="2"/>
-<path d="M530,290 C670,276 810,264 940,250" fill="none" stroke="#dd8800" stroke-width="2.4"/>
+<path d="M530,298 C670,290 810,280 940,272" fill="none" stroke="#666666" stroke-width="1.5" stroke-dasharray="7 4"/>
+<path d="M530,290 C670,276 810,264 940,250" fill="none" stroke="#dd8800" stroke-width="2.8"/>
 <text x="518" y="316" font-family="Arial" font-size="11" fill="#333333">below 0, above EMA, rising</text>
 <rect x="510" y="336" width="450" height="110" fill="#ffffff" stroke="#dddddd"/>
 <text x="518" y="352" font-family="Arial" font-size="11" fill="#333333">middle - rising_below_ema</text>
 <line x1="530" y1="370" x2="940" y2="370" stroke="#8888cc" stroke-width="1" fill="none"/>
-<path d="M530,394 C670,390 810,386 940,382" fill="none" stroke="#dd4444" stroke-width="2"/>
-<path d="M530,424 C670,414 810,402 940,390" fill="none" stroke="#dd8800" stroke-width="2.4"/>
+<path d="M530,394 C670,390 810,386 940,382" fill="none" stroke="#666666" stroke-width="1.5" stroke-dasharray="7 4"/>
+<path d="M530,424 C670,414 810,402 940,390" fill="none" stroke="#dd8800" stroke-width="2.8"/>
 <text x="518" y="436" font-family="Arial" font-size="11" fill="#333333">below 0, below EMA, rising</text>
 <rect x="510" y="456" width="450" height="140" fill="#ffffff" stroke="#dddddd"/>
 <text x="518" y="472" font-family="Arial" font-size="11" fill="#333333">hist - below_0 hist_shrinking</text>
@@ -61,4 +61,15 @@
 <rect x="800" y="484" width="28" height="32" fill="#dd8800"/>
 <rect x="860" y="484" width="28" height="20" fill="#dd8800"/>
 <text x="518" y="588" font-family="Arial" font-size="11" fill="#333333">below 0, bars shrink toward zero</text>
+<text x="24" y="602" font-family="Arial" font-size="11" fill="#555555">legend</text>
+<line x1="24" y1="616" x2="60" y2="616" stroke="#0a8aa8" stroke-width="2.8" fill="none"/>
+<text x="66" y="620" font-family="Arial" font-size="11" fill="#0a8aa8">RPM buy1</text>
+<line x1="168" y1="616" x2="204" y2="616" stroke="#dd8800" stroke-width="2.8" fill="none"/>
+<text x="210" y="620" font-family="Arial" font-size="11" fill="#dd8800">RPM sell1</text>
+<line x1="332" y1="616" x2="380" y2="616" stroke="#666666" stroke-width="1.5" stroke-dasharray="7 4" fill="none"/>
+<text x="386" y="620" font-family="Arial" font-size="11" fill="#666666">EMA (dashed, thinner)</text>
+<line x1="560" y1="616" x2="596" y2="616" stroke="#8888cc" stroke-width="1" fill="none"/>
+<text x="602" y="620" font-family="Arial" font-size="11" fill="#555555">zero</text>
+<rect x="656" y="608" width="14" height="14" fill="#0a8aa8"/>
+<text x="676" y="620" font-family="Arial" font-size="11" fill="#555555">hist</text>
 </svg>
