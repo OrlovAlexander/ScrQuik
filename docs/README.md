@@ -2,7 +2,7 @@
 
 | документ | о чём |
 |---|---|
-| [analyzer.md](analyzer.md) | Python-анализатор: модули, CLI, тесты |
+| [python-analyzer.md](python-analyzer.md) | Python-анализатор: модули, CLI, тесты |
 | [analyzer-marks.md](analyzer-marks.md) | метки на графике: barsSaver, `--watch`, `*AnalyzerMarks`, сетапы |
 | [barsSaver.md](barsSaver.md) | установка и отличия от апстрима nick-nh |
 | [barsSaver upstream](https://github.com/nick-nh/qlua/tree/master/barsSaver) | исходный скрипт выгрузки свечей |

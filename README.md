@@ -72,7 +72,7 @@ python -m analyzer --watch
 `--watch` не закрывать: простой **11 с**, пачка грязных тикеров до **21 с**, сначала M1, потом M10.
 
 Подробности запуска, задержки и сетапы: [docs/analyzer-marks.md](docs/analyzer-marks.md).
-Архитектура Python: [docs/analyzer.md](docs/analyzer.md).
+Архитектура Python: [docs/python-analyzer.md](docs/python-analyzer.md).
 barsSaver: [docs/barsSaver.md](docs/barsSaver.md).
 
 ## Тесты
