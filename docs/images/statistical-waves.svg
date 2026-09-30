@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="980" height="520" viewBox="0 0 980 520">
 <rect width="980" height="520" fill="#f7f7f4"/>
-<text x="24" y="28" font-family="Arial" font-size="16" fill="#111111" font-weight="bold">Статистические волны Кречетова</text>
+<text x="24" y="28" font-family="Arial" font-size="16" fill="#111111" font-weight="bold">Статистические волны (предположение по Кречетову, не копия стратегии)</text>
 <text x="24" y="48" font-family="Arial" font-size="12" fill="#444444">точки 1–5, канал, вход у 5, цель — линия 1–4, стоп за 5. Нога 4→5 не длиннее 2→3</text>
 
 <rect x="20" y="64" width="460" height="400" fill="#ffffff" stroke="#dddddd"/>

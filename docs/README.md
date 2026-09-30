@@ -4,7 +4,7 @@
 |---|---|
 | [python-analyzer.md](python-analyzer.md) | Python-анализатор: модули, CLI, тесты |
 | [analyzer-marks.md](analyzer-marks.md) | метки на графике: barsSaver, `--watch`, `*AnalyzerMarks`, теги сетапов, частота в истории |
-| [analyzer-waves.md](analyzer-waves.md) | зигзаг Кречетова на графике: `--watch-waves`, `*AnalyzerZigZag` |
+| [analyzer-waves.md](analyzer-waves.md) | зигзаг на графике (`--watch-waves`, `*AnalyzerZigZag`); разметка 1–5 — предположение по Кречетову, не копия стратегии |
 | [barsSaver.md](barsSaver.md) | установка и отличия от апстрима nick-nh |
 | [barsSaver upstream](https://github.com/nick-nh/qlua/tree/master/barsSaver) | исходный скрипт выгрузки свечей |
 | [rpm-tf-up-5/](rpm-tf-up-5/) | дивергенции `*RPM_TF_Up_5` |

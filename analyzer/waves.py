@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Krechetov statistical waves: swing pivots, zigzag legs, left/right 1-5 geometry.
+"""Swing pivots, zigzag legs, left/right 1-5 geometry.
 
-Independent of RPM buy/sell setups. Confirms on closed bars only.
+Heuristic inspired by public Krechetov statistical-wave talks; not a copy of
+his strategy. Independent of RPM buy/sell setups. Confirms on closed bars only.
 """
 
 from __future__ import annotations
@@ -448,7 +449,7 @@ def format_waves(report: dict) -> str:
     align = report.get("align") or {}
     lines = [
         f"{report['sec']} {report['class_code']}  clock={_fmt_dt(report.get('clock'))}  "
-        f"Krechetov waves  M1x{WAVE_WINDOW['M1']} M10x{WAVE_WINDOW['M10']} "
+        f"waves (Krechetov-like heuristic)  M1x{WAVE_WINDOW['M1']} M10x{WAVE_WINDOW['M10']} "
         f"M30x{WAVE_WINDOW['M30']}"
     ]
     if align.get("side"):
@@ -530,7 +531,7 @@ def write_waves_csv(path: Path, pivots: list[dict]) -> None:
 
 
 def last_zigzag_14(pivots: list[dict]) -> list[dict]:
-    """1-4 of the last five confirmed zigzag pivots, even if Krechetov filters reject."""
+    """1-4 of the last five confirmed zigzag pivots, even if geometry filters reject."""
     confirmed = [p for p in pivots if p.get("confirmed")]
     pts = confirmed[-5:]
     if len(pts) < 5:

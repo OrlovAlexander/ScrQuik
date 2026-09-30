@@ -33,7 +33,7 @@ def main() -> None:
     p.add_argument("--class-code", default=None, help="Class; default TQBR, SPBFUT for CNY*; omit with --watch to include every class")
     p.add_argument("--json", action="store_true")
     p.add_argument("--combo", action="store_true", help="H4->M1 unique states and M1 moves >= 1 percent, aggregated start/end table")
-    p.add_argument("--waves", action="store_true", help="Krechetov zigzag/waves on M1/M10/M30; write CSV for *AnalyzerZigZag")
+    p.add_argument("--waves", action="store_true", help="Zigzag/waves on M1/M10/M30 (Krechetov-inspired heuristic, not a copy); write CSV for *AnalyzerZigZag")
     p.add_argument("--watch-waves", action="store_true", help="Keep re-exporting zigzag CSV when barsSaver CSV grows")
     p.add_argument("--m30", action="store_true", help="M30 moves >= 3 percent with M1 and M10 what's now at start/end")
     p.add_argument("--marks", action="store_true", help="Write setup CSV for the AnalyzerMarks QUIK overlay")
