@@ -2,6 +2,7 @@
 
 | документ | о чём |
 |---|---|
+| [tag-packs.md](tag-packs.md) | тег, пачка (один бар одного ТФ), связка, цепочка, цепочка связок; похожесть — по числам живого графика |
 | [python-analyzer.md](python-analyzer.md) | Python-анализатор: модули, CLI, тесты |
 | [analyzer-marks.md](analyzer-marks.md) | метки на графике M1/M10/M30/H4/D1: barsSaver, `--watch`, `*AnalyzerMarks`, теги сетапов |
 | [analyzer-waves.md](analyzer-waves.md) | зигзаг на графике (`--watch-waves`, `*AnalyzerZigZag`); разметка 1–5 — предположение по Кречетову, не копия стратегии |

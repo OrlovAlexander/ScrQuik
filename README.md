@@ -79,6 +79,7 @@ python -m analyzer --watch
 
 Зигзаг на графике: [docs/analyzer-waves.md](docs/analyzer-waves.md) (`--watch-waves`, `*AnalyzerZigZag`).
 Подробности меток и сетапов: [docs/analyzer-marks.md](docs/analyzer-marks.md).
+Теги, пачки, связки, цепочки, цепочка связок и похожесть по числам живого графика: [docs/tag-packs.md](docs/tag-packs.md).
 Архитектура Python: [docs/python-analyzer.md](docs/python-analyzer.md).
 barsSaver: [docs/barsSaver.md](docs/barsSaver.md).
 

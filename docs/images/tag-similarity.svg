@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="820" viewBox="0 0 980 820">
+<rect width="980" height="820" fill="#f7f7f4"/>
+<text x="24" y="28" font-family="Arial" font-size="16" fill="#111111" font-weight="bold">Похожесть 80% — по числам живого графика, не по готовым тегам</text>
+<text x="24" y="48" font-family="Arial" font-size="12" fill="#444444">сначала z с last_closed живого графика, порог к z, затем пересчёт тегов той же шкалой</text>
+
+<rect x="20" y="64" width="470" height="56" fill="#ffffff" stroke="#0a8aa8" stroke-width="1.6"/>
+<text x="32" y="86" font-family="Arial" font-size="13" fill="#0a8aa8" font-weight="bold">1. Живой график, last_closed</text>
+<text x="32" y="106" font-family="Arial" font-size="11" fill="#333333">один закрытый бар одного ТФ (как на экране QUIK)</text>
+
+<line x1="255" y1="120" x2="255" y2="136" stroke="#0a8aa8" stroke-width="1.6"/>
+<polygon points="255,142 250,132 260,132" fill="#0a8aa8"/>
+
+<rect x="20" y="142" width="470" height="88" fill="#ffffff" stroke="#dddddd"/>
+<text x="32" y="164" font-family="Arial" font-size="13" fill="#111111" font-weight="bold">2. Снять числа, из которых делают теги</text>
+<text x="32" y="184" font-family="Arial" font-size="11" fill="#333333">RPM current / small / middle, их EMA, hist</text>
+<text x="32" y="202" font-family="Arial" font-size="11" fill="#333333">шаги: dRPM, dEMA за 1 бар, dEMA за 5 баров, dhist</text>
+<text x="32" y="220" font-family="Arial" font-size="11" fill="#666666">не метки below_0 / falling — сырые rpm, ema, hist, дельты</text>
+
+<line x1="255" y1="230" x2="255" y2="246" stroke="#0a8aa8" stroke-width="1.6"/>
+<polygon points="255,252 250,242 260,242" fill="#0a8aa8"/>
+
+<rect x="20" y="252" width="470" height="70" fill="#ffffff" stroke="#2b6cb0" stroke-width="1.6"/>
+<text x="32" y="274" font-family="Arial" font-size="13" fill="#2b6cb0" font-weight="bold">3. Шкала живого графика</text>
+<text x="32" y="294" font-family="Arial" font-size="11" fill="#333333">медиана модуля ряда на этом окне + пороги NEAR_*</text>
+<text x="32" y="312" font-family="Arial" font-size="11" fill="#666666">чужой кусок истории как шкалу не подставлять</text>
+
+<line x1="255" y1="322" x2="255" y2="338" stroke="#0a8aa8" stroke-width="1.6"/>
+<polygon points="255,344 250,334 260,334" fill="#0a8aa8"/>
+
+<rect x="20" y="344" width="470" height="92" fill="#ffffff" stroke="#dddddd"/>
+<text x="32" y="366" font-family="Arial" font-size="13" fill="#111111" font-weight="bold">4. Нормировка — то, из чего потом тег</text>
+<text x="32" y="390" font-family="Arial" font-size="13" fill="#111111">z = current.rpm / шкала</text>
+<text x="32" y="412" font-family="Arial" font-size="11" fill="#333333">шкала = median(|current.rpm|) по окну живого графика</text>
+<text x="32" y="428" font-family="Arial" font-size="11" fill="#333333">тот же знаменатель у исторического бара</text>
+
+<line x1="255" y1="436" x2="255" y2="452" stroke="#0a8aa8" stroke-width="1.6"/>
+<polygon points="255,458 250,448 260,448" fill="#0a8aa8"/>
+
+<rect x="20" y="458" width="470" height="96" fill="#ffffff" stroke="#1a8f3a" stroke-width="1.6"/>
+<text x="32" y="480" font-family="Arial" font-size="13" fill="#1a8f3a" font-weight="bold">5. Порог к z, не к тегам</text>
+<text x="32" y="502" font-family="Arial" font-size="12" fill="#111111">sim = среднее по полям  1 − |z_ист − z_живой| / max(|z|, 1)</text>
+<text x="32" y="522" font-family="Arial" font-size="11" fill="#333333">в выборку, если sim &gt;= 80%. Шаги входят в среднее наравне с RPM/EMA/hist.</text>
+<text x="32" y="540" font-family="Arial" font-size="11" fill="#666666">один чужой знак у мелкой дельты сильно тянет sim вниз</text>
+
+<line x1="255" y1="554" x2="255" y2="570" stroke="#0a8aa8" stroke-width="1.6"/>
+<polygon points="255,576 250,566 260,566" fill="#0a8aa8"/>
+
+<rect x="20" y="576" width="224" height="88" fill="#f4e8e8" stroke="#cc4433"/>
+<text x="32" y="600" font-family="Arial" font-size="13" fill="#cc4433" font-weight="bold">sim &lt; 80%</text>
+<text x="32" y="622" font-family="Arial" font-size="11" fill="#333333">бар не в выборке</text>
+<text x="32" y="640" font-family="Arial" font-size="11" fill="#666666">теги даже не сравнивают</text>
+<rect x="256" y="576" width="234" height="88" fill="#e8f4ee" stroke="#1a8f3a"/>
+<text x="268" y="600" font-family="Arial" font-size="13" fill="#1a8f3a" font-weight="bold">sim &gt;= 80%</text>
+<text x="268" y="622" font-family="Arial" font-size="11" fill="#333333">пересчёт тегов states.py</text>
+<text x="268" y="640" font-family="Arial" font-size="11" fill="#333333">на живой шкале (vs0, slope, hist…)</text>
+
+<line x1="373" y1="664" x2="373" y2="680" stroke="#0a8aa8" stroke-width="1.6"/>
+<polygon points="373,686 368,676 378,676" fill="#0a8aa8"/>
+
+<rect x="20" y="686" width="470" height="52" fill="#ffffff" stroke="#dddddd"/>
+<text x="32" y="708" font-family="Arial" font-size="13" fill="#111111" font-weight="bold">6. Пачка &gt;=5 тегов одного бара одного ТФ → доля исхода</text>
+<text x="32" y="726" font-family="Arial" font-size="11" fill="#333333">связка — по пересчитанным пачкам каждого ТФ. Базу и lift не считать.</text>
+
+<rect x="510" y="64" width="450" height="308" fill="#ffffff" stroke="#0a8aa8" stroke-width="1.6"/>
+<text x="522" y="86" font-family="Arial" font-size="13" fill="#0a8aa8" font-weight="bold">Пример: z current.rpm с живого D1</text>
+<text x="522" y="106" font-family="Arial" font-size="11" fill="#555555">CNY-12.26  last_closed 29.09.2026  C=12.729</text>
+<text x="522" y="128" font-family="Arial" font-size="12" fill="#111111">current.rpm = −0.0386</text>
+<text x="522" y="146" font-family="Arial" font-size="12" fill="#111111">шкала = median(|current.rpm|) = 0.1001</text>
+<text x="522" y="168" font-family="Arial" font-size="13" fill="#111111" font-weight="bold">z = −0.0386 / 0.1001 = −0.385</text>
+<text x="522" y="190" font-family="Arial" font-size="11" fill="#333333">NEAR_ZERO × шкала = 0.25 × 0.1001 = 0.0250</text>
+<text x="522" y="208" font-family="Arial" font-size="11" fill="#333333">|rpm| = 0.0386 &gt; 0.0250  →  vs0 = below_0</text>
+<line x1="522" y1="218" x2="940" y2="218" stroke="#eeeeee"/>
+<text x="522" y="238" font-family="Arial" font-size="11" fill="#555555">тот же знаменатель 0.1001 на истории 28.09:</text>
+<text x="522" y="256" font-family="Arial" font-size="11" fill="#333333">current.rpm = −0.0227    z = −0.0227 / 0.1001 = −0.227</text>
+<text x="522" y="274" font-family="Arial" font-size="11" fill="#333333">|rpm| = 0.0227 &lt; 0.0250  →  vs0 = near_0</text>
+<text x="522" y="296" font-family="Arial" font-size="12" fill="#1a8f3a" font-weight="bold">sim поля = 1 − |−0.227 − (−0.385)| / 1 = 0.84</text>
+<text x="522" y="358" font-family="Arial" font-size="11" fill="#333333">теги разные, z близки: Hamming выкинул бы бар, порог 80% — нет</text>
+
+<line x1="540" y1="328" x2="930" y2="328" stroke="#8888cc" stroke-width="1.5"/>
+<rect x="660" y="308" width="78" height="40" fill="#d8efe4" stroke="#1a8f3a" stroke-dasharray="4 3"/>
+<line x1="699" y1="308" x2="699" y2="348" stroke="#0a8aa8" stroke-width="3"/>
+<circle cx="699" cy="328" r="6" fill="#0a8aa8"/>
+<circle cx="730" cy="328" r="5" fill="#1a8f3a"/>
+<text x="546" y="322" font-family="Arial" font-size="9" fill="#0a8aa8">живой −0.385</text>
+<text x="736" y="322" font-family="Arial" font-size="9" fill="#1a8f3a">28.09 −0.227</text>
+
+<rect x="510" y="380" width="450" height="148" fill="#ffffff" stroke="#cc4433" stroke-width="1.6"/>
+<text x="522" y="404" font-family="Arial" font-size="13" fill="#cc4433" font-weight="bold">Не так — Hamming по готовым тегам</text>
+<text x="522" y="426" font-family="Arial" font-size="11" fill="#333333">29.09 vs0=below_0     28.09 vs0=near_0</text>
+<text x="522" y="448" font-family="Arial" font-size="12" fill="#cc4433">метка не совпала → 0, хотя sim поля = 0.84</text>
+<text x="522" y="470" font-family="Arial" font-size="11" fill="#555555">below_0 против near_0 как 0/1 ломает бар</text>
+<text x="522" y="488" font-family="Arial" font-size="11" fill="#555555">у порога NEAR, хотя rpm почти тот же</text>
+<text x="522" y="512" font-family="Arial" font-size="11" fill="#333333">сначала числа и z, теги — после порога</text>
+<line x1="920" y1="392" x2="944" y2="416" stroke="#cc4433" stroke-width="3"/>
+<line x1="944" y1="392" x2="920" y2="416" stroke="#cc4433" stroke-width="3"/>
+
+<rect x="510" y="544" width="450" height="256" fill="#ffffff" stroke="#dddddd"/>
+<text x="522" y="568" font-family="Arial" font-size="13" fill="#111111" font-weight="bold">Что входит в среднее sim</text>
+<text x="522" y="592" font-family="Arial" font-size="11" fill="#333333">слои current, small, middle, hist — как на графике</text>
+<rect x="522" y="604" width="14" height="14" fill="#0a8aa8"/>
+<text x="542" y="616" font-family="Arial" font-size="11" fill="#333333">уровни: rpm, ema, hist</text>
+<rect x="522" y="626" width="14" height="14" fill="#dd8800"/>
+<text x="542" y="638" font-family="Arial" font-size="11" fill="#333333">шаги: d rpm, d ema, d ema5, d hist</text>
+<text x="522" y="664" font-family="Arial" font-size="11" fill="#333333">порог 80% — к среднему по всем этим z, не к доле меток</text>
+<text x="522" y="688" font-family="Arial" font-size="11" fill="#333333">прошёл порог → теги пересчитывают:</text>
+<text x="522" y="708" font-family="Arial" font-size="11" fill="#333333">vs0, vs_ema, slope, ema_vs0, ema_slope, ema_trend,</text>
+<text x="522" y="726" font-family="Arial" font-size="11" fill="#333333">hist_sign, hist_dir  — классификатор states.py</text>
+<text x="522" y="750" font-family="Arial" font-size="11" fill="#333333">пачка &gt;=5 тегов одного ТФ; чужой ТФ в пачку не класть</text>
+<text x="522" y="772" font-family="Arial" font-size="11" fill="#333333">доля исхода — только среди таких баров / связки</text>
+<text x="522" y="790" font-family="Arial" font-size="11" fill="#666666">следующий дневной бар: close к close last_closed D1</text>
+</svg>
