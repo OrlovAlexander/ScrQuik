@@ -1,0 +1,52 @@
+# Зигзаг анализатора на графике QUIK
+
+Анализатор `--waves` считает пивоты high/low и ноги зигзага.
+Индикатор `*AnalyzerZigZag` рисует только ноги зигзага на цене по CSV.
+Сетапы buy/sell и `*AnalyzerMarks` не затрагиваются.
+
+Исходник: [`lua/AnalyzerZigZag.lua`](../lua/AnalyzerZigZag.lua).
+
+## Что должно быть запущено
+
+| # | Что | Зачем |
+|---|---|---|
+| 1 | QUIK + **barsSaver** | пишет свечи |
+| 2 | `python -m analyzer --watch-waves` (или разовый `--waves`) | пишет пивоты в CSV |
+| 3 | индикатор **\*AnalyzerZigZag** на ценовой панели M1, M10 или M30 | рисует ноги |
+
+H4 анализатор не считает. На H4 индикатор ничего не рисует.
+
+## Запуск
+
+```text
+python -m analyzer --sec CNY12.26 --waves
+python -m analyzer --watch-waves --sec CNY12.26
+python -m analyzer --watch-waves
+```
+
+`--waves` — разовая выгрузка и текст в консоль.
+`--watch-waves` — как `--watch` у меток: простой 11 с, пачка до 21 с, сначала M1, потом M10, потом M30. Окно не закрывать.
+
+CSV:
+
+`C:\QuikFinam\LuaIndicators\analyzer_waves\{SEC}_{CLASS}_{ТФ}.csv` — пивоты (`datetime;kind;price;confirmed`).
+
+Пример: `CR_SPBFUT_M30.csv`. Цена пивота — high на вершине, low во впадине. Индикатор линии 1–4 и точки разворота не рисует.
+
+Правила разметки (симметрия, канал, 4→5 не длиннее 2→3): [statistical-waves.svg](images/statistical-waves.svg). H4 `--waves` не считает.
+
+## Индикатор
+
+Скопировать `lua/AnalyzerZigZag.lua` в:
+
+`C:\QuikFinam\LuaIndicators\AnalyzerZigZag.lua`
+
+На графике M1, M10 или M30: добавить `*AnalyzerZigZag` **на ценовую панель**. После замены lua снять и навесить снова.
+
+Настройки:
+
+- `ConfirmedOnly = 0` — последнюю неподтверждённую ногу тоже рисует (тем же цветом).
+- `ReloadSec = 15` — как часто смотреть, изменился ли CSV.
+- `WavesDir` — пусто = `LuaIndicators\analyzer_waves`.
+
+Цвет зигзага — светло-серый, толщина 1. Без точек пивотов и без линии 1–4. После смены lua снять индикатор и навесить снова.

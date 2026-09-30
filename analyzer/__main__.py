@@ -8,6 +8,7 @@ from datetime import datetime
 from analyzer.snapshot import analyze_instrument
 from analyzer.combo import format_combo, format_m30_look, study_combo, study_m30_look
 from analyzer.marks import export_all_marks, export_marks, format_marks, watch_marks
+from analyzer.waves import export_waves, format_waves, watch_waves
 
 
 def _class_code(sec: str | None, class_code: str | None, all_classes: bool) -> str | None:
@@ -32,12 +33,22 @@ def main() -> None:
     p.add_argument("--class-code", default=None, help="Class; default TQBR, SPBFUT for CNY*; omit with --watch to include every class")
     p.add_argument("--json", action="store_true")
     p.add_argument("--combo", action="store_true", help="H4->M1 unique states and M1 moves >= 1 percent, aggregated start/end table")
+    p.add_argument("--waves", action="store_true", help="Krechetov zigzag/waves on M1/M10/M30; write CSV for *AnalyzerZigZag")
+    p.add_argument("--watch-waves", action="store_true", help="Keep re-exporting zigzag CSV when barsSaver CSV grows")
     p.add_argument("--m30", action="store_true", help="M30 moves >= 3 percent with M1 and M10 what's now at start/end")
     p.add_argument("--marks", action="store_true", help="Write setup CSV for the AnalyzerMarks QUIK overlay")
     p.add_argument("--watch", action="store_true", help="Keep re-exporting marks when barsSaver CSV grows")
     p.add_argument("--poll", type=float, default=11.0, help="Idle seconds between barsSaver checks in --watch")
     args = p.parse_args()
-    cls = _class_code(args.sec, args.class_code, args.watch or args.marks)
+    cls = _class_code(args.sec, args.class_code, args.watch or args.marks or args.watch_waves)
+    if args.watch_waves:
+        if args.json:
+            p.error("--json cannot be used with --watch-waves")
+        try:
+            watch_waves(args.sec, cls, poll=args.poll)
+        except KeyboardInterrupt:
+            print("watch-waves stopped", flush=True)
+        return
     if args.watch or args.marks:
         if args.watch:
             if args.json:
@@ -61,6 +72,13 @@ def main() -> None:
         return
     if not args.sec:
         p.error("--sec is required unless --marks or --watch")
+    if args.waves:
+        report = export_waves(args.sec, cls or "TQBR")
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2, default=_default))
+            return
+        print(format_waves(report))
+        return
     if args.m30:
         report = study_m30_look(args.sec, cls or "TQBR")
         if args.json:

@@ -4,6 +4,7 @@
 from analyzer.snapshot import analyze_instrument, assert_layout
 from analyzer.combo import study_combo, study_m30_look
 from analyzer.marks import export_all_marks, export_marks, watch_marks
+from analyzer.waves import export_waves, format_waves, study_waves, watch_waves
 
 __all__ = [
     "analyze_instrument",
@@ -13,4 +14,8 @@ __all__ = [
     "export_marks",
     "export_all_marks",
     "watch_marks",
+    "study_waves",
+    "format_waves",
+    "export_waves",
+    "watch_waves",
 ]

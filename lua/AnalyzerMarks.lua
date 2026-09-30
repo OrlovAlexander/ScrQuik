@@ -1,4 +1,4 @@
--- Overlay for analyzer setups (buy/sell/buy1/sell1/buy2/sell2) on M1 and M10.
+-- Overlay for analyzer setups (buy/sell/buy1/sell1/buy2/sell2) on M1, M10, M30, H4.
 -- CSV from: python -m analyzer --watch
 -- Put this indicator on the price pane (same window as candles).
 
@@ -73,7 +73,7 @@ _G.Settings = {
 }
 
 local PlotLines = function(index) return index end
-local MARKS_TF = { M1 = true, M10 = true }
+local MARKS_TF = { M1 = true, M10 = true, M30 = true, H4 = true }
 local sleep = _G.sleep
 
 local function retrySettings()
@@ -104,14 +104,15 @@ local function chartTfTag()
     if interval == nil then
         return "NA"
     end
+    interval = math.floor(interval + 0.5)
     if interval >= 1440 and interval % 1440 == 0 then
-        local days = interval / 1440
+        local days = math.floor(interval / 1440 + 0.5)
         if days == 1 then return "D1" end
         if days == 7 then return "W1" end
         return "D"..tostring(days)
     end
     if interval >= 60 and interval % 60 == 0 then
-        return "H"..tostring(interval / 60)
+        return "H"..tostring(math.floor(interval / 60 + 0.5))
     end
     return "M"..tostring(interval)
 end
@@ -320,7 +321,7 @@ local function Algo()
 
     return function(index)
         if not MARKS_TF[chartTfTag()] then
-            return nil, nil, nil, nil
+            return nil, nil, nil, nil, nil, nil
         end
         if index == 1 then
             refresh()

@@ -14,9 +14,7 @@
 |---|---|---|
 | 1 | QUIK + скрипт **[barsSaver](https://github.com/nick-nh/qlua/tree/master/barsSaver)** | пишет свечи |
 | 2 | `python -m analyzer --watch` из корня репозитория | считает сетапы и пишет метки |
-| 3 | индикатор **\*AnalyzerMarks** на ценовой панели M1 или M10 | рисует точки |
-
-M30 и H4 анализатор для меток **не считает**. На этих ТФ индикатор ничего не рисует.
+| 3 | индикатор **\*AnalyzerMarks** на ценовой панели M1, M10, M30 или H4 | рисует точки |
 
 ## Запуск
 
@@ -43,9 +41,9 @@ barsSaver дописывает строку, когда у бара **новое
 python -m analyzer --watch
 ```
 
-Окно не закрывать. Каждые **11 секунд** в консоли строка `poll#… n=… dirty=… M1=… M10=…`. Если `dirty=0` — свечи не выросли, пересчёта нет, это не зависание. Ctrl+C останавливает.
+Окно не закрывать. Каждые **11 секунд** в консоли строка `poll#… n=… dirty=… M1=… M10=… M30=… H4=…`. Если `dirty=0` — свечи не выросли, пересчёта нет, это не зависание. Ctrl+C останавливает.
 
-Сначала считаются все грязные **M1**, потом **M10**. Грязная пачка занимает до **21 с**; если не влезли — строка `defer … next poll`. Для меток считаются последние ~6 тыс. баров M1 и ~2 тыс. M10, не вся история CSV. После короткого цикла пауза — остаток до 11 с, а не ещё 11 с сверху.
+Сначала считаются все грязные **M1**, потом **M10**, потом **M30**, потом **H4**. Грязная пачка занимает до **21 с**; если не влезли — строка `defer … next poll`. Для меток считаются последние ~6 тыс. баров M1 и ~2 тыс. M10, M30 и H4, не вся история CSV. После короткого цикла пауза — остаток до 11 с, а не ещё 11 с сверху.
 
 Другие варианты:
 
@@ -68,7 +66,7 @@ python -m analyzer --sec CNY12.26 --watch
 
 `C:\QuikFinam\LuaIndicators\AnalyzerMarks.lua`
 
-На графике **M1** или **M10**:
+На графике **M1**, **M10**, **M30** или **H4**:
 
 1. Добавить индикатор `*AnalyzerMarks`.
 2. Поставить его **на ценовую панель** (не в отдельное окно).
@@ -84,7 +82,7 @@ python -m analyzer --sec CNY12.26 --watch
 
 `C:\QuikFinam\LuaIndicators\analyzer_marks\{SEC}_{CLASS}_{ТФ}.csv`
 
-Только M1 и M10. Пример: `GAZP_TQBR_M10.csv`.
+M1, M10, M30 и H4. Пример: `GAZP_TQBR_M10.csv`, `GAZP_TQBR_H4.csv`.
 
 Индикатор берёт `sec_code` и ТФ из окна графика и открывает соответствующий файл.
 
@@ -99,7 +97,35 @@ python -m analyzer --sec CNY12.26 --watch
 | жёлто-зелёная | buy2 | под low |
 | сиреневая | sell2 | над high |
 
-Порядок проверки: buy, sell, buy1, sell1, buy2, sell2, иначе `none`. Тег, которого нет в таблице сетапа, **не проверяется** (любое значение подходит).
+Порядок проверки: buy, sell, buy1, sell1, buy2, sell2, иначе `none`. Тег, которого нет в таблице сетапа, **не проверяется** (любое значение подходит). Метки только по **закрытому** бару: формирующаяся свеча на графике в расчёт не входит.
+
+Наклон и флет в ячейках: `(/)` рост, `(\)` падение, `(-)` флет.
+
+### Все сетапы
+
+| тег | buy | sell | buy1 | sell1 | buy2 | sell2 |
+|---|---|---|---|---|---|---|
+| current.vs0 | `below_0` | `above_0` | `below_0` | `above_0` | `below_0` | `above_0` |
+| current.vs_ema | `below_ema` | `above_ema` | `below_ema` | `above_ema` | `below_ema` | `above_ema` |
+| current.slope | | | `rising_below_ema` `(/)` | `falling_above_ema` `(\)` | | |
+| current.ema_vs0 | `below_0` | `above_0` | | | `above_0` | `below_0` |
+| current.ema_trend | | | | | `falling` `(\)` | `rising` `(/)` |
+| small.vs0 | `below_0` | `above_0` | `above_0` | `below_0` | `above_0` | `below_0` |
+| small.vs_ema | `below_ema` | `above_ema` | `below_ema` | `above_ema` | `above_ema` | `below_ema` |
+| small.slope | | | `falling_below_ema` `(\)` | `rising_above_ema` `(/)` | `rising_above_ema` `(/)` | `falling_below_ema` `(\)` |
+| small.ema_vs0 | `below_0` | `above_0` | `above_0` | `below_0` | `above_0` | `below_0` |
+| small.ema_slope | | | `falling` `(\)` | `rising` `(/)` | | |
+| small.ema_trend | `falling` `(\)` | `rising` `(/)` | | | `rising` `(/)` | `falling` `(\)` |
+| middle.vs0 | `below_0` | `above_0` | `above_0` | `below_0` | `above_0` | `below_0` |
+| middle.vs_ema | `below_ema` | `above_ema` | `above_ema` | `below_ema` | `below_ema` | `above_ema` |
+| middle.slope | | | `flat_above_ema` `(-)` или `falling_above_ema` `(\)` | `flat_below_ema` `(-)` или `rising_below_ema` `(/)` | | |
+| middle.ema_vs0 | `below_0` | `above_0` | `above_0` | `below_0` | `above_0` | `below_0` |
+| middle.ema_slope | | | `flat` `(-)` или `falling` `(\)` | `flat` `(-)` или `rising` `(/)` | | |
+| middle.ema_trend | `falling` `(\)` | `rising` `(/)` | | | `falling` `(\)` | `rising` `(/)` |
+| hist.hist_sign | `below_0` | `above_0` | `above_0` | `below_0` | `above_0` | `below_0` |
+| hist.hist_dir | `hist_growing` `(\)` | `hist_growing` `(/)` | `hist_shrinking` `(\)` | `hist_shrinking` `(/)` | `hist_shrinking` `(\)` | `hist_shrinking` `(/)` |
+
+На графике H4 слои up: small = H12, middle = D1, hist = W1.
 
 ### Словарь тегов
 
@@ -138,25 +164,9 @@ python -m analyzer --sec CNY12.26 --watch
 
 ### buy / sell
 
+Классический стек: small, middle, current и hist с одной стороны нуля, hist удлиняется от нуля. Наклон small/middle (`slope`) не входит.
+
 ![buy слева, sell справа: все слои ниже/выше нуля, hist растёт от нуля](images/setup-buy-sell.svg)
-
-| слой | тег | buy | sell | словами |
-|---|---|---|---|---|
-| small | `vs0` | `below_0` | `above_0` | RPM small ниже / выше нуля |
-| small | `vs_ema` | `below_ema` | `above_ema` | RPM small ниже / выше своей EMA |
-| small | `ema_vs0` | `below_0` | `above_0` | EMA small ниже / выше нуля |
-| small | `ema_trend` | `falling` | `rising` | EMA small падает / растёт 5 баров |
-| middle | `vs0` | `below_0` | `above_0` | RPM middle ниже / выше нуля |
-| middle | `vs_ema` | `below_ema` | `above_ema` | RPM middle ниже / выше своей EMA |
-| middle | `ema_vs0` | `below_0` | `above_0` | EMA middle ниже / выше нуля |
-| middle | `ema_trend` | `falling` | `rising` | EMA middle падает / растёт 5 баров |
-| current | `vs0` | `below_0` | `above_0` | RPM current ниже / выше нуля |
-| current | `vs_ema` | `below_ema` | `above_ema` | RPM current ниже / выше своей EMA |
-| current | `ema_vs0` | `below_0` | `above_0` | EMA current ниже / выше нуля |
-| hist | `hist_sign` | `below_0` | `above_0` | гистограмма ниже / выше нуля |
-| hist | `hist_dir` | `hist_growing` | `hist_growing` | столбик удлиняется от нуля |
-
-Наклон самих small/middle (`slope`) в классическом стеке не входит.
 
 ### buy1 / sell1
 
@@ -164,51 +174,15 @@ python -m analyzer --sec CNY12.26 --watch
 
 ![buy1 слева, sell1 справа: current разворачивается, старшие слои ещё с той стороны, hist сжимается](images/setup-buy1-sell1.svg)
 
-| слой | тег | buy1 | sell1 | словами |
-|---|---|---|---|---|
-| current | `vs0` | `below_0` | `above_0` | current уже ниже / выше нуля |
-| current | `vs_ema` | `below_ema` | `above_ema` | current ниже / выше своей EMA |
-| current | `slope` | `rising_below_ema` | `falling_above_ema` | current разворачивается вверх снизу / вниз сверху |
-| small | `vs0` | `above_0` | `below_0` | small ещё выше / ниже нуля |
-| small | `vs_ema` | `below_ema` | `above_ema` | small уже ниже / выше своей EMA |
-| small | `slope` | `falling_below_ema` | `rising_above_ema` | small падает под EMA / растёт над EMA |
-| small | `ema_vs0` | `above_0` | `below_0` | EMA small ещё выше / ниже нуля |
-| small | `ema_slope` | `falling` | `rising` | EMA small падает / растёт (1 бар) |
-| middle | `vs0` | `above_0` | `below_0` | middle ещё выше / ниже нуля |
-| middle | `vs_ema` | `above_ema` | `below_ema` | middle ещё выше / ниже своей EMA |
-| middle | `slope` | `flat_above_ema` или `falling_above_ema` | `flat_below_ema` или `rising_below_ema` | middle над EMA не растёт / под EMA не падает |
-| middle | `ema_vs0` | `above_0` | `below_0` | EMA middle ещё выше / ниже нуля |
-| middle | `ema_slope` | `flat` или `falling` | `flat` или `rising` | EMA middle не растёт / не падает (1 бар) |
-| hist | `hist_sign` | `above_0` | `below_0` | hist ещё выше / ниже нуля |
-| hist | `hist_dir` | `hist_shrinking` | `hist_shrinking` | столбик сжимается к нулю |
-
 ### buy2 / sell2
 
-Как Si M1 22.09.2026 18:55. Наклон middle и 1-бар current не входят.
+Как Si M1 22.09.2026 18:55. Наклон middle и 1-барный `slope` current не входят.
 
 ![buy2 слева, sell2 справа: current под нулём при EMA над нулём, small растёт, middle ниже своей EMA](images/setup-buy2-sell2.svg)
 
-| слой | тег | buy2 | sell2 | словами |
-|---|---|---|---|---|
-| current | `vs0` | `below_0` | `above_0` | current ниже / выше нуля |
-| current | `vs_ema` | `below_ema` | `above_ema` | current ниже / выше своей EMA |
-| current | `ema_vs0` | `above_0` | `below_0` | EMA current ещё выше / уже ниже нуля |
-| current | `ema_trend` | `falling` | `rising` | EMA current падает / растёт 5 баров |
-| small | `vs0` | `above_0` | `below_0` | small выше / ниже нуля |
-| small | `vs_ema` | `above_ema` | `below_ema` | small выше / ниже своей EMA |
-| small | `ema_vs0` | `above_0` | `below_0` | EMA small выше / ниже нуля |
-| small | `ema_trend` | `rising` | `falling` | EMA small растёт / падает 5 баров |
-| small | `slope` | `rising_above_ema` | `falling_below_ema` | small растёт над EMA / падает под EMA |
-| middle | `vs0` | `above_0` | `below_0` | middle выше / ниже нуля |
-| middle | `vs_ema` | `below_ema` | `above_ema` | middle **ниже** своей EMA / **выше** своей EMA |
-| middle | `ema_vs0` | `above_0` | `below_0` | EMA middle выше / ниже нуля |
-| middle | `ema_trend` | `falling` | `rising` | EMA middle падает / растёт 5 баров |
-| hist | `hist_sign` | `above_0` | `below_0` | hist выше / ниже нуля |
-| hist | `hist_dir` | `hist_shrinking` | `hist_shrinking` | столбик сжимается к нулю |
-
 ## Как часто в истории
 
-Onset (первая свеча серии, как `OnsetOnly=1`) по полным CSV M1 и M10, **52** инструмента barsSaver. RPM считается со второй половины каждого файла (`floor(n/2)+1`), как Lua. Крайние даты в файлах: 09.01.2026 — 24.09.2026 21:45. Не окно меток 6000/2000.
+Onset (первая свеча серии, как `OnsetOnly=1`) по полным CSV M1 и M10, **52** инструмента barsSaver. RPM считается со второй половины каждого файла (`floor(n/2)+1`), как Lua. Крайние даты в файлах: 09.01.2026 — 24.09.2026 21:45. Не окно меток 6000/2000. Частота onset на M30 и H4 в эту таблицу не входила.
 
 | сетап | M1 | M10 | всего | доля |
 |---|---:|---:|---:|---:|
@@ -232,7 +206,7 @@ Onset (первая свеча серии, как `OnsetOnly=1`) по полны
 1. В `C:\QuikFinam\LuaScripts\barsSaver\sec_list.txt` добавить **четыре** строки: interval 1, 10, 30, 240.
 2. `sec_code` и `class_code` взять **как в QUIK** (CreateDataSource). Длинные имена фьючерсов часто не работают.
 3. Перезапустить barsSaver, дождаться файлов в `data\`.
-4. `--watch` подхватит новый тикер сам, когда появятся M1 и M10.
+4. `--watch` подхватит новый тикер сам, когда появятся M1, M10, M30 и H4.
 
 Пример акций:
 
@@ -248,5 +222,6 @@ Onset (первая свеча серии, как `OnsetOnly=1`) по полны
 - Запущен ли barsSaver, есть ли свежий CSV в `data\` **на тот же ТФ**, что график.
 - Запущен ли `python -m analyzer --watch`, пишет ли он строки в консоль (`poll=11s budget=21s`).
 - Есть ли файл меток в `analyzer_marks` на тот же тикер и ТФ, что график, и не обрывается ли он раньше последней свечи.
-- Индикатор навешен на **цену** M1/M10, lua скопирован из `lua/AnalyzerMarks.lua` в `LuaIndicators`.
+- Индикатор навешен на **цену** M1/M10/M30/H4, lua скопирован из `lua/AnalyzerMarks.lua` в `LuaIndicators`. После замены lua снять и навесить заново.
+- На H4 QUIK отдаёт `interval=240`; тег ТФ должен быть `H4`, не `H4.0`, иначе индикатор не откроет `*_H4.csv` и точек не будет.
 - Для фьючерса в `sec_list` короткий код (`CRZ6`, не `CNY12.26`).

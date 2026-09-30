@@ -26,6 +26,7 @@ Python считает те же линии, что Lua на графике QUIK,
 | `analyzer/price.py` | классификация хода цены |
 | `analyzer/snapshot.py` | снимок одного инструмента на M1/M10/M30/H4 |
 | `analyzer/marks.py` | CSV меток и `--watch` |
+| `analyzer/waves.py` | статистические волны Кречетова: зигзаг high/low, точки 1–5, CSV для `*AnalyzerZigZag` |
 | `analyzer/__main__.py` | CLI |
 
 Пороги тегов (доля медианы модуля ряда): `NEAR_ZERO=0.25`, `NEAR_EMA=0.15`, `NEAR_SLOPE=0.08`, `NEAR_HIST=0.15`. Тренд EMA — за 5 баров.
@@ -41,6 +42,8 @@ python -m analyzer --sec GAZP
 python -m analyzer --sec GAZP --json
 python -m analyzer --sec GAZP --combo
 python -m analyzer --sec GAZP --m30
+python -m analyzer --sec CNY12.26 --waves
+python -m analyzer --watch-waves --sec CNY12.26
 python -m analyzer --sec GAZP --marks
 python -m analyzer --marks
 python -m analyzer --watch
@@ -51,6 +54,8 @@ python -m analyzer --watch --sec CNY12.26
 
 `--combo` — уникальные связки H4->M1 и ходы M1 >= 1%. `--m30` — ходы M30 >= 3% с состоянием M1/M10 на концах.
 
+`--waves` — отдельный анализатор, не сетапы buy/sell. Зигзаг по high/low закрытых баров, ноги между пивотами, левая и правая волна 1–5 по правилам Кречетова (канал, маятник, 4→5 не длиннее 2→3, цель линия 1–4, стоп за 5). Окна M1×120 / M10×90 / M30×90, история M1 1600 / M10 800 / M30 800. Пороги зигзага: M1 0.15%, M10 0.2%, M30 0.25%. Пишет CSV для оверлея `*AnalyzerZigZag` (см. [analyzer-waves.md](analyzer-waves.md)). `--watch-waves` обновляет этот CSV при росте barsSaver.
+
 ## Сетапы
 
 Порядок в `setup_signal`: buy, sell, buy1, sell1, buy2, sell2, иначе `none`.
@@ -59,7 +64,7 @@ python -m analyzer --watch --sec CNY12.26
 - **buy1 / sell1** — кросс как M10 25.08.2026 17:20; middle ещё с той стороны, наклон `flat` или против тренда (не только `falling`/`rising`).
 - **buy2 / sell2** — как Si M1 22.09.2026 18:55 (middle относительно своей EMA: buy2 ниже EMA, sell2 выше).
 
-Полные теги и счётчик появлений по истории — в [analyzer-marks.md](analyzer-marks.md).
+Полные теги (одна таблица на все шесть сетапов) и счётчик появлений — в [analyzer-marks.md](analyzer-marks.md).
 
 ## Свечи
 
@@ -67,7 +72,7 @@ CSV пишет [barsSaver](barsSaver.md). Файлы:
 
 `C:\QuikFinam\LuaScripts\barsSaver\data\{SEC}_{CLASS}_{TF}_.csv`
 
-Для меток читаются последние ~6000 M1 и ~2000 M10. Формирующаяся свеча в CSV не попадает: строка пишется, когда у бара новое время.
+Для меток читаются последние ~6000 M1 и ~2000 M10, M30 и H4. Формирующаяся свеча в CSV не попадает: строка пишется, когда у бара новое время.
 
 ## Тесты
 
@@ -75,4 +80,4 @@ CSV пишет [barsSaver](barsSaver.md). Файлы:
 python -m unittest discover -s tests -t . -v
 ```
 
-Формулы RPM, секции ini, сетапы, очередь `--watch` (M1 раньше M10) проверяются без QUIK. Снимок GAZP — только если CSV barsSaver на месте.
+Формулы RPM, секции ini, сетапы, очередь `--watch` (M1 раньше M10, затем M30 и H4) проверяются без QUIK. Снимок GAZP — только если CSV barsSaver на месте.

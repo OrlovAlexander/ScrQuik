@@ -35,6 +35,7 @@ docs/                документация
 | `lua/One2One_121.lua` | паттерн 121 |
 | `lua/one2oneLib.lua` | библиотека 121 |
 | `lua/AnalyzerMarks.lua` | точки сетапов на цене |
+| `lua/AnalyzerZigZag.lua` | ноги зигзага `--waves` на цене |
 
 После замены lua снять индикатор с графика и навесить снова.
 
@@ -47,7 +48,7 @@ docs/                документация
 - один `*RPM_TF_Current`
 - один `*RPM_TF_Up_5`
 
-`*One2One_121` — **только M30**. `*AnalyzerMarks` — только M1 и M10, на ценовой панели.
+`*One2One_121` — **только M30**. `*AnalyzerMarks` — M1, M10, M30 и H4, на ценовой панели. `*AnalyzerZigZag` — M1, M10 и M30, на ценовой панели.
 
 Слои RPM-up (Small / Middle / Up):
 
@@ -60,18 +61,21 @@ docs/                документация
 
 ## Анализатор
 
-Считает те же RPM и сетапы `buy` / `sell` / `buy1` / `sell1` / `buy2` / `sell2` по CSV свечей и пишет метки для `*AnalyzerMarks`.
+Считает те же RPM и сетапы `buy` / `sell` / `buy1` / `sell1` / `buy2` / `sell2` по CSV свечей и пишет метки для `*AnalyzerMarks`. Отдельно `--waves` строит зигзаг и волны Кречетова (точки 1–5), без изменения правил сетапов.
 
 ```text
 python -m analyzer --sec GAZP
 python -m analyzer --sec GAZP --combo
+python -m analyzer --sec CNY12.26 --waves
+python -m analyzer --watch-waves --sec CNY12.26
 python -m analyzer --marks
 python -m analyzer --watch
 ```
 
-`--watch` не закрывать: простой **11 с**, пачка грязных тикеров до **21 с**, сначала M1, потом M10.
+`--watch` не закрывать: простой **11 с**, пачка грязных тикеров до **21 с**, сначала M1, потом M10, M30, H4.
 
-Подробности запуска, задержки и сетапы: [docs/analyzer-marks.md](docs/analyzer-marks.md).
+Зигзаг на графике: [docs/analyzer-waves.md](docs/analyzer-waves.md) (`--watch-waves`, `*AnalyzerZigZag`).
+Подробности меток и сетапов: [docs/analyzer-marks.md](docs/analyzer-marks.md).
 Архитектура Python: [docs/python-analyzer.md](docs/python-analyzer.md).
 barsSaver: [docs/barsSaver.md](docs/barsSaver.md).
 

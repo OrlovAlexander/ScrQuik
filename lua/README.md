@@ -9,7 +9,8 @@
 | `RPM_TF_Current.lua` | `*RPM_TF_Current` | M1, M10, M30, H4 |
 | `RPM_TF_Up_5.lua` | `*RPM_TF_Up_5` | M1, M10, M30, H4 |
 | `One2One_121.lua` + `one2oneLib.lua` | `*One2One_121` | только M30 |
-| `AnalyzerMarks.lua` | `*AnalyzerMarks` | M1 и M10, панель цены |
+| `AnalyzerMarks.lua` | `*AnalyzerMarks` | M1, M10, M30, H4, панель цены |
+| `AnalyzerZigZag.lua` | `*AnalyzerZigZag` | M1, M10, M30, панель цены |
 
 Ini в репозитории (`config/`) читает Python-анализатор. QUIK на графике берёт параметры из окна настроек / `finam.wnd`.
 

@@ -12,8 +12,8 @@ from analyzer.bars import BARS_DIR, Bar, csv_live_sec, csv_path, list_instrument
 from analyzer.combo import tf_series
 
 MARKS_DIR = Path(r"C:\QuikFinam\LuaIndicators\analyzer_marks")
-MARKS_TFS = ("M1", "M10")
-MARKS_MAX_BARS = {"M1": 6000, "M10": 2000}
+MARKS_TFS = ("M1", "M10", "M30", "H4")
+MARKS_MAX_BARS = {"M1": 6000, "M10": 2000, "M30": 2000, "H4": 2000}
 DT_FMT = "%d.%m.%Y %H:%M:%S"
 SETUP_CODE = {"none": 0, "buy": 1, "sell": 2, "buy1": 3, "sell1": 4, "buy2": 5, "sell2": 6}
 _WRITE_TRIES = 6
@@ -221,17 +221,20 @@ def watch_marks(
     sleeper: Callable[[float], None] = time.sleep,
     stop: Callable[[], bool] | None = None,
     log: Callable[[str], None] | None = None,
+    formatter: Callable[..., str] | None = None,
+    label: str = "marks",
 ) -> int:
     """Re-export marks whenever barsSaver CSV files grow. Returns export count."""
     wait = max(1.0, float(poll))
     budget = max(wait, DIRTY_BUDGET_SEC)
     run = exporter or export_marks
     emit = log or (lambda msg: print(msg, flush=True))
+    fmt = formatter or format_marks
     chosen = tfs or MARKS_TFS
     bars_root = data_dir or BARS_DIR
     dest = dest_dir or MARKS_DIR
     scope = sec or f"* {class_code or 'ALL'}"
-    emit(f"watch {scope}  poll={wait:.0f}s  budget={budget:.0f}s  bars={bars_root}  marks={dest}")
+    emit(f"watch {scope}  poll={wait:.0f}s  budget={budget:.0f}s  bars={bars_root}  {label}={dest}")
     last: dict[tuple[str, str, str], tuple] = {}
     exports = 0
     cycle = 0
@@ -269,7 +272,7 @@ def watch_marks(
                         tfs=(tf,),
                     )
                     report["exported_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    emit(format_marks(report, compact=True))
+                    emit(fmt(report, compact=True))
                     last[(name, cls, tf)] = fp
                     exports += 1
                     done += 1

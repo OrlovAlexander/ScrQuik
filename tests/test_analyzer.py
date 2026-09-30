@@ -647,7 +647,7 @@ class ComboTests(unittest.TestCase):
         self.assertEqual(rows[1]["code"], 1)
         self.assertEqual(rows[3]["code"], 2)
         self.assertEqual(rows[5]["code"], 3)
-        self.assertEqual(MARKS_TFS, ("M1", "M10"))
+        self.assertEqual(MARKS_TFS, ("M1", "M10", "M30", "H4"))
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -706,8 +706,8 @@ class ComboTests(unittest.TestCase):
                 stop=stop,
                 log=lambda _msg: None,
             )
-            self.assertEqual(n, 3)
-            self.assertEqual(len(calls), 3)
+            self.assertEqual(n, 5)
+            self.assertEqual(len(calls), 5)
 
     def test_list_instruments_and_watch_all(self):
         import tempfile
@@ -778,10 +778,14 @@ class ComboTests(unittest.TestCase):
                     ("SBER", ("M1",)),
                     ("GAZP", ("M10",)),
                     ("SBER", ("M10",)),
+                    ("GAZP", ("M30",)),
+                    ("SBER", ("M30",)),
+                    ("GAZP", ("H4",)),
+                    ("SBER", ("H4",)),
                     ("SBER", ("M10",)),
                 ],
             )
-            self.assertEqual(n, 5)
+            self.assertEqual(n, 9)
 
     def test_load_csv_tail(self):
         import tempfile
@@ -851,6 +855,270 @@ class ComboTests(unittest.TestCase):
         polls = [line for line in logs if "poll#" in line]
         self.assertGreaterEqual(len(polls), 2)
         self.assertTrue(any("dirty=0" in line for line in polls))
+
+
+def _pt(kind: str, i: int, price: float, confirmed: bool = True) -> dict:
+    return {
+        "kind": kind,
+        "i": i,
+        "dt": datetime(2026, 1, 1, 10, 0) + timedelta(minutes=i),
+        "price": price,
+        "confirmed": confirmed,
+    }
+
+
+def _path_bars(knots: list[tuple[int, float]], wick: float = 0.05) -> list[Bar]:
+    t0 = datetime(2026, 1, 1, 10, 0)
+    last_i = knots[-1][0]
+    path = [knots[0][1]] * (last_i + 1)
+    for (i0, p0), (i1, p1) in zip(knots, knots[1:]):
+        span = i1 - i0
+        for j in range(i0, i1 + 1):
+            t = 0.0 if span == 0 else (j - i0) / span
+            path[j] = p0 + t * (p1 - p0)
+    bars = []
+    for i, px in enumerate(path):
+        bars.append(
+            Bar(t0 + timedelta(minutes=i), px, px + wick, px - wick, px)
+        )
+    return bars
+
+
+class KrechetovWaveTests(unittest.TestCase):
+    def test_swing_pivots_high_low_not_close(self):
+        from analyzer.waves import swing_pivots
+
+        knots = [(0, 100.0), (20, 108.0), (40, 96.0), (55, 101.0)]
+        pivots = swing_pivots(_path_bars(knots), min_pct=1.0)
+        kinds = [p["kind"] for p in pivots if p["confirmed"]]
+        self.assertGreaterEqual(len(kinds), 2)
+        self.assertEqual(kinds[0], "low")
+        self.assertIn("high", kinds)
+
+    def test_right_buy_passes_geometry(self):
+        from analyzer.waves import _right_wave, find_waves
+
+        pts = [
+            _pt("low", 10, 100.0),
+            _pt("high", 30, 107.0),
+            _pt("low", 55, 96.0),
+            _pt("high", 80, 105.0),
+            _pt("low", 105, 99.0),
+        ]
+        raw, reason = _right_wave(pts, 1.0)
+        self.assertIsNone(reason)
+        self.assertEqual(raw["kind"], "right")
+        self.assertEqual(raw["side"], "buy")
+
+        bars = _path_bars(
+            [(0, 100.0), (20, 107.0), (45, 96.0), (70, 105.0), (95, 99.0), (115, 102.0)]
+        )
+        pack = find_waves(bars, min_pct=1.0, window=40)
+        sides = {(w["kind"], w["side"]) for w in pack["waves"]}
+        self.assertIn(("right", "buy"), sides)
+
+    def test_right_sell_is_mirror(self):
+        from analyzer.waves import _right_wave
+
+        pts = [
+            _pt("high", 10, 100.0),
+            _pt("low", 30, 93.0),
+            _pt("high", 55, 104.0),
+            _pt("low", 80, 91.0),
+            _pt("high", 105, 101.0),
+        ]
+        raw, reason = _right_wave(pts, 1.0)
+        self.assertIsNone(reason, reason)
+        self.assertEqual(raw["side"], "sell")
+
+    def test_left_sell_three_and_three(self):
+        from analyzer.waves import _left_wave
+
+        pts = [
+            _pt("low", 10, 97.0),
+            _pt("high", 30, 104.0),
+            _pt("low", 55, 98.0),
+            _pt("high", 80, 111.0),
+            _pt("low", 105, 100.0),
+            _pt("high", 130, 107.0),
+        ]
+        raw, reason = _left_wave(pts, 1.0)
+        self.assertIsNone(reason, reason)
+        self.assertEqual(raw["kind"], "left")
+        self.assertEqual(raw["side"], "sell")
+
+    def test_reject_when_5_beyond_head(self):
+        from analyzer.waves import _right_wave
+
+        pts = [
+            _pt("low", 10, 100.0),
+            _pt("high", 30, 107.0),
+            _pt("low", 55, 96.0),
+            _pt("high", 80, 105.0),
+            _pt("low", 105, 92.0),
+        ]
+        raw, reason = _right_wave(pts, 1.0)
+        self.assertIsNone(raw)
+        self.assertIn(reason, {"5_beyond_3", "4to5_longer"})
+
+    def test_sideways_has_no_wave(self):
+        from analyzer.waves import find_waves
+
+        knots = [(0, 100.0)]
+        px = 100.0
+        i = 0
+        for _ in range(12):
+            i += 8
+            px = 100.4 if px <= 100.0 else 99.6
+            knots.append((i, px))
+        pack = find_waves(_path_bars(knots, wick=0.02), min_pct=1.0, window=40)
+        self.assertEqual(pack["waves"], [])
+
+    def test_format_waves_mentions_legs(self):
+        from analyzer.waves import format_waves
+
+        text = format_waves(
+            {
+                "sec": "GAZP",
+                "class_code": "TQBR",
+                "clock": datetime(2026, 1, 1, 12, 0),
+                "align": {"side": None, "tfs": []},
+                "tfs": {
+                    "M1": {
+                        "bars": 10,
+                        "last_bar": datetime(2026, 1, 1, 12, 0),
+                        "close": 100.0,
+                        "min_pct": 0.15,
+                        "pivots": [],
+                        "legs": [],
+                        "waves": [],
+                        "current": None,
+                        "reject_counts": {},
+                    },
+                    "M10": {
+                        "bars": 10,
+                        "last_bar": datetime(2026, 1, 1, 12, 0),
+                        "close": 100.0,
+                        "min_pct": 0.2,
+                        "pivots": [],
+                        "legs": [],
+                        "waves": [],
+                        "current": None,
+                        "reject_counts": {},
+                    },
+                    "M30": {
+                        "bars": 10,
+                        "last_bar": datetime(2026, 1, 1, 12, 0),
+                        "close": 100.0,
+                        "min_pct": 0.25,
+                        "pivots": [],
+                        "legs": [],
+                        "waves": [],
+                        "current": None,
+                        "reject_counts": {},
+                    },
+                },
+            }
+        )
+        self.assertIn("GAZP", text)
+        self.assertIn("current: none", text)
+
+    def test_waves_csv_pivots(self):
+        from analyzer.waves import format_pivot_dt, write_waves_csv
+
+        t0 = datetime(2026, 9, 25, 10, 0)
+        pivots = [
+            {
+                "kind": "low",
+                "i": 0,
+                "dt": t0,
+                "price": 12.789,
+                "confirmed": True,
+            },
+            {
+                "kind": "high",
+                "i": 30,
+                "dt": t0 + timedelta(minutes=30),
+                "price": 12.848,
+                "confirmed": False,
+            },
+        ]
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "CR_SPBFUT_M30.csv"
+            write_waves_csv(path, pivots)
+            text = path.read_text(encoding="utf-8")
+        self.assertIn("datetime;kind;price;confirmed", text)
+        self.assertIn(format_pivot_dt(t0) + ";low;12.789000;1", text)
+        self.assertIn(";high;12.848000;0", text)
+
+    def test_waves_csv_target_14(self):
+        from analyzer.waves import format_pivot_dt, write_targets_csv
+
+        t0 = datetime(2026, 9, 6, 10, 0)
+        waves = [
+            {
+                "kind": "right",
+                "side": "sell",
+                "status": "complete",
+                "points": [
+                    {"n": 1, "dt": t0, "price": 13.10},
+                    {"n": 2, "dt": t0, "price": 12.90},
+                    {"n": 3, "dt": t0, "price": 13.20},
+                    {"n": 4, "dt": t0 + timedelta(hours=2), "price": 12.95},
+                    {"n": 5, "dt": t0 + timedelta(hours=4), "price": 13.076},
+                ],
+            }
+        ]
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "CR_SPBFUT_M30_14.csv"
+            write_targets_csv(path, waves)
+            text = path.read_text(encoding="utf-8")
+        self.assertIn("dt1;px1;dt4;px4;dt5;px5;side;kind;status", text)
+        self.assertIn(format_pivot_dt(t0) + ";13.100000;", text)
+        self.assertIn(";sell;right;complete", text)
+
+    def test_last_zigzag_14_uses_last_five_confirmed(self):
+        from analyzer.waves import last_zigzag_14, target_rows
+
+        t0 = datetime(2026, 9, 25, 13, 30)
+        pivots = []
+        seq = [
+            ("low", 12.731),
+            ("high", 12.764),
+            ("low", 12.734),
+            ("high", 12.767),
+            ("low", 12.738),
+        ]
+        for i, (kind, px) in enumerate(seq):
+            pivots.append(
+                {
+                    "kind": kind,
+                    "i": i,
+                    "dt": t0 + timedelta(minutes=10 * i),
+                    "price": px,
+                    "confirmed": True,
+                }
+            )
+        pivots.append(
+            {
+                "kind": "high",
+                "i": 5,
+                "dt": t0 + timedelta(hours=4),
+                "price": 12.764,
+                "confirmed": False,
+            }
+        )
+        rows = target_rows(last_zigzag_14(pivots))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["side"], "buy")
+        self.assertEqual(rows[0]["kind"], "zz")
+        self.assertAlmostEqual(rows[0]["px1"], 12.731)
+        self.assertAlmostEqual(rows[0]["px4"], 12.767)
+        self.assertAlmostEqual(rows[0]["px5"], 12.738)
 
 
 if __name__ == "__main__":
