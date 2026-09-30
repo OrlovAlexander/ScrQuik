@@ -17,21 +17,23 @@ Python считает те же линии, что Lua на графике QUIK,
 | `analyzer/bars.py` | CSV barsSaver, алиасы фьючерсов (`CNY12.26` / `CRZ6` -> `CR_SPBFUT_*.csv`) |
 | `analyzer/ema.py` | EMA |
 | `analyzer/rpm_current.py` | FIR 12 + EMA(90), расчёт со второй половины истории (`floor(n/2)+1`, как Lua) |
-| `analyzer/rpm_up.py` | агрегация Small/Middle/Up, гистограмма, дивер |
+| `analyzer/rpm_up.py` | агрегация Small/Middle/Up, гистограмма, дивер; D2–D5/W2–W5 — unix-слоты Lua |
 | `analyzer/settings.py` | `config/RPM_TF_Up_5.ini`, `config/One2One_121.ini` |
 | `analyzer/one2one.py` | 121 на M30 |
 | `analyzer/neighbors.py` | закрытый бар младшего ТФ на момент старшего |
 | `analyzer/states.py` | теги vs0 / vs_ema / slope / ema_vs0 / ema_slope / ema_trend / hist |
 | `analyzer/combo.py` | сетапы buy/sell/buy1/sell1/buy2/sell2, дерево состояний |
 | `analyzer/price.py` | классификация хода цены |
-| `analyzer/snapshot.py` | снимок одного инструмента на M1/M10/M30/H4 |
-| `analyzer/marks.py` | CSV меток и `--watch` |
+| `analyzer/snapshot.py` | снимок одного инструмента на M1/M10/M30/H4 (D1 — только метки `--watch` / `--marks`) |
+| `analyzer/marks.py` | CSV меток M1/M10/M30/H4/D1 и `--watch` |
 | `analyzer/waves.py` | зигзаг high/low и волны 1–5 (предположение по Кречетову, не копия стратегии); CSV для `*AnalyzerZigZag` |
 | `analyzer/__main__.py` | CLI |
 
 Пороги тегов (доля медианы модуля ряда): `NEAR_ZERO=0.25`, `NEAR_EMA=0.15`, `NEAR_SLOPE=0.08`, `NEAR_HIST=0.15`. Тренд EMA — за 5 баров.
 
-Гистограмма на графике берётся с того слоя, у которого в ini `HistDraw=1` (M1/M30/H4 — Up, M10 — Small).
+Гистограмма на графике берётся с того слоя, у которого в ini `HistDraw=1` (M1/M30/H4/D1 — Up, M10 — Small). Цвет столбика — **направление**, не знак: зелёный (`histUp`) — столбик выше предыдущего, оранжевый (`histDw`) — ниже или равен, даже если hist всё ещё > 0.
+
+D2–D5 и W2–W5 режутся **как в Lua**: unix-день `floor(os.time({year,month,day,hour=12})/86400)`, для недель `floor((dayNumber-4)/7)`. Не `datetime.toordinal()`: сдвиг эпохи на 3 дня даёт другие OHLC и другой `hist_dir` (на D1 sell оказывался на оранжевом столбике). W1 по-прежнему новый бар в понедельник. Ini-секцию `[RPM_TF_Up_5.D1]` (D5/W2/W5) снимает `tools/one2one/extract_rpm_up_ini.py` из `finam.wnd` по Small=`D5`.
 
 ## CLI
 
@@ -72,7 +74,7 @@ CSV пишет [barsSaver](barsSaver.md). Файлы:
 
 `C:\QuikFinam\LuaScripts\barsSaver\data\{SEC}_{CLASS}_{TF}_.csv`
 
-Для меток читаются последние ~6000 M1 и ~2000 M10, M30 и H4. Формирующаяся свеча в CSV не попадает: строка пишется, когда у бара новое время.
+Для меток читаются последние ~6000 M1, ~2000 M10/M30/H4 и ~800 D1. Формирующаяся свеча в CSV не попадает: строка пишется, когда у бара новое время.
 
 ## Тесты
 
@@ -80,4 +82,4 @@ CSV пишет [barsSaver](barsSaver.md). Файлы:
 python -m unittest discover -s tests -t . -v
 ```
 
-Формулы RPM, секции ini, сетапы, очередь `--watch` (M1 раньше M10, затем M30 и H4) проверяются без QUIK. Снимок GAZP — только если CSV barsSaver на месте.
+Формулы RPM, секции ini (в том числе D1 = D5/W2/W5), unix-слоты D5/W5, сетапы, очередь `--watch` (M1 → M10 → M30 → H4 → D1) проверяются без QUIK. Снимок GAZP — только если CSV barsSaver на месте.

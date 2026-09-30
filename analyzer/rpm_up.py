@@ -12,6 +12,11 @@ from analyzer.ema import Ema
 from analyzer.settings import LayerSettings, UpSettings
 
 HOUR_SLOT = {"H1": 1, "H2": 2, "H3": 3, "H4": 4, "H6": 6, "H8": 8, "H12": 12}
+DAY_SLOT = {"D1": 1, "D2": 2, "D3": 3, "D4": 4, "D5": 5}
+WEEK_SLOT = {"W1": 1, "W2": 2, "W3": 3, "W4": 4, "W5": 5}
+# Lua dayNumber = floor(os.time({year,month,day,hour=12})/86400).
+# Unix day 0 is 1970-01-01 (Thursday); Monday 1970-01-05 is day 4.
+_UNIX_ORDINAL = datetime(1970, 1, 1).toordinal()
 DIV_EXTENDED_PCT = 0.003
 DIV_WEAK_RPM_PCT = 0.015
 DIV_WEAK_PRICE_PCT = 0.005
@@ -57,6 +62,55 @@ class DivEntry:
 
 def _is_hour_tf(tf: str) -> bool:
     return tf in HOUR_SLOT
+
+
+def _is_day_tf(tf: str) -> bool:
+    return tf in DAY_SLOT
+
+
+def _day_number(dt: datetime) -> int:
+    """Same integer as Lua dayNumber (unix days), not Gregorian toordinal()."""
+    return dt.toordinal() - _UNIX_ORDINAL
+
+
+def _day_slot(dt: datetime, tf: str) -> int | None:
+    n = DAY_SLOT.get(tf)
+    if n is None:
+        return None
+    return _day_number(dt) // n
+
+
+def _is_new_daily(tf: str, up_t: datetime, cr_t: datetime) -> bool:
+    if tf not in DAY_SLOT:
+        return False
+    return _day_slot(up_t, tf) != _day_slot(cr_t, tf)
+
+
+def _is_week_tf(tf: str) -> bool:
+    return tf in WEEK_SLOT
+
+
+def _week_number(dt: datetime) -> int:
+    """Same integer as Lua weekNumber: floor((dayNumber - 4) / 7)."""
+    return (_day_number(dt) - 4) // 7
+
+
+def _week_slot(dt: datetime, tf: str) -> int | None:
+    n = WEEK_SLOT.get(tf)
+    if n is None:
+        return None
+    return _week_number(dt) // n
+
+
+def _is_new_weekly(tf: str, up_t: datetime, cr_t: datetime) -> bool:
+    n = WEEK_SLOT.get(tf)
+    if n is None:
+        return False
+    if n == 1:
+        return cr_t.weekday() == 0 and (
+            up_t.day != cr_t.day or up_t.month != cr_t.month or up_t.year != cr_t.year
+        )
+    return _week_slot(up_t, tf) != _week_slot(cr_t, tf)
 
 
 def _is_minute_tf(tf: str) -> bool:
@@ -114,7 +168,7 @@ def _first_bar_ok(tf: str, cr: datetime) -> bool:
         return cr.minute % mod == 0
     if _is_hour_tf(tf):
         return _is_hour_boundary(cr, tf)
-    if tf in {"D1", "W1", "M1"}:
+    if _is_day_tf(tf) or _is_week_tf(tf) or tf == "M1":
         return True
     return False
 
@@ -125,9 +179,9 @@ def _should_add(tf: str, up_t: datetime, cr_t: datetime) -> bool:
     new_month = up_t.month != cr_t.month
     if tf == "M1" and new_month:
         return True
-    if tf == "W1" and cr_t.weekday() == 0 and new_day:
+    if _is_new_weekly(tf, up_t, cr_t):
         return True
-    if tf == "D1" and new_day:
+    if _is_new_daily(tf, up_t, cr_t):
         return True
     if _is_new_hourly(tf, up_t, cr_t):
         return True

@@ -21,8 +21,8 @@ M30_MOVE_PCT = 3.0
 M30_SHOW_LAST = 20
 SETUP_LOOKBACK = {"M1": 100, "M10": 50}
 SETUP_NAMES = frozenset({"buy", "sell", "buy1", "sell1", "buy2", "sell2"})
-WARMUP = {"M1": 200, "M10": 120, "M30": 80, "H4": 60}
-PERIOD_MIN = {"M1": 1, "M10": 10, "M30": 30, "H4": 240}
+WARMUP = {"M1": 200, "M10": 120, "M30": 80, "H4": 60, "D1": 80}
+PERIOD_MIN = {"M1": 1, "M10": 10, "M30": 30, "H4": 240, "D1": 1440}
 
 
 def _tags_match(pack: dict | None, **expect) -> bool:

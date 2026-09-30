@@ -23,7 +23,7 @@ C:\QuikFinam\LuaScripts\barsSaver\
 
 В апстриме примеры `SRZ1` / `RIZ1` с алгоритмами EMA/MACD. У нас только OHLC, без `algo`.
 
-У каждого инструмента **четыре** интервала: `1`, `10`, `30`, `240` (M1 / M10 / M30 / H4). Другие ТФ анализатор не читает.
+У каждого инструмента **пять** интервалов: `1`, `10`, `30`, `240`, `1440` (M1 / M10 / M30 / H4 / D1).
 
 Список собран из открытых графиков (`finam.wnd`): акции TQBR и фьючерсы SPBFUT. Коды — как в `CreateDataSource`, не как заголовок графика.
 
@@ -59,13 +59,14 @@ C:\QuikFinam\LuaScripts\barsSaver\
 
 ## Как добавить инструмент
 
-Четыре строки в `sec_list.txt`:
+Пять строк в `sec_list.txt`:
 
 ```text
 { sec_code = "SBER", class_code = "TQBR", interval = 1 },
 { sec_code = "SBER", class_code = "TQBR", interval = 10 },
 { sec_code = "SBER", class_code = "TQBR", interval = 30 },
 { sec_code = "SBER", class_code = "TQBR", interval = 240 },
+{ sec_code = "SBER", class_code = "TQBR", interval = 1440 },
 ```
 
-Перезапустить скрипт, дождаться файлов в `data\`. `--watch` подхватит тикер, когда появятся M1, M10, M30 и H4.
+Перезапустить скрипт, дождаться файлов в `data\`. `--watch` подхватит тикер, когда появятся M1, M10, M30 и H4; D1 — когда появится `*_D1_.csv`.

@@ -1,4 +1,4 @@
--- Overlay for analyzer setups (buy/sell/buy1/sell1/buy2/sell2) on M1, M10, M30, H4.
+-- Overlay for analyzer setups (buy/sell/buy1/sell1/buy2/sell2) on M1, M10, M30, H4, D1.
 -- CSV from: python -m analyzer --watch
 -- Put this indicator on the price pane (same window as candles).
 
@@ -73,7 +73,7 @@ _G.Settings = {
 }
 
 local PlotLines = function(index) return index end
-local MARKS_TF = { M1 = true, M10 = true, M30 = true, H4 = true }
+local MARKS_TF = { M1 = true, M10 = true, M30 = true, H4 = true, D1 = true }
 local sleep = _G.sleep
 
 local function retrySettings()
@@ -100,16 +100,27 @@ end
 
 local function chartTfTag()
     local ds = _G.getDataSourceInfo and _G.getDataSourceInfo() or {}
-    local interval = tonumber(ds.interval)
+    local raw = ds.interval
+    if type(raw) == "string" then
+        local u = string.upper(raw)
+        if u == "D1" or u == "D" or u == "DAY" or u == "DAILY" then
+            return "D1"
+        end
+        if u == "W1" or u == "W" or u == "WEEK" then
+            return "W1"
+        end
+    end
+    local interval = tonumber(raw)
     if interval == nil then
         return "NA"
     end
     interval = math.floor(interval + 0.5)
-    if interval >= 1440 and interval % 1440 == 0 then
-        local days = math.floor(interval / 1440 + 0.5)
-        if days == 1 then return "D1" end
-        if days == 7 then return "W1" end
-        return "D"..tostring(days)
+    -- Day chart: QUIK D1 is 1440; some builds report a nearby minute count.
+    if interval >= 1400 and interval < 10080 then
+        return "D1"
+    end
+    if interval >= 10080 and interval < 20000 then
+        return "W1"
     end
     if interval >= 60 and interval % 60 == 0 then
         return "H"..tostring(math.floor(interval / 60 + 0.5))
@@ -133,21 +144,49 @@ local function marksPath()
     local dir = marksDir()
     local names = { sec }
     local u = string.upper(sec)
-    if string.sub(u, 1, 3) == "CNY" then
+    if string.sub(u, 1, 3) == "CNY" or u == "CR" or u == "CRZ6" then
         names[#names + 1] = "CR"
+        names[#names + 1] = "CRZ6"
+        names[#names + 1] = "CNY12.26"
+        names[#names + 1] = "CNY-12.26"
     end
     if cls == "SPBFUT" and string.len(sec) > 2 then
         names[#names + 1] = string.sub(sec, 1, string.len(sec) - 2)
     end
+    local classes = { cls }
+    if cls ~= "SPBFUT" and (string.sub(u, 1, 3) == "CNY" or u == "CR" or u == "CRZ6") then
+        classes[#classes + 1] = "SPBFUT"
+    end
+    local seen = {}
     for i = 1, #names do
-        local path = dir.."\\"..names[i].."_"..cls.."_"..tf..".csv"
-        local fh = io.open(path, "r")
-        if fh ~= nil then
-            fh:close()
-            return path
+        if names[i] ~= nil and names[i] ~= "" and not seen[names[i]] then
+            seen[names[i]] = true
+            for c = 1, #classes do
+                local path = dir.."\\"..names[i].."_"..classes[c].."_"..tf..".csv"
+                local fh = io.open(path, "r")
+                if fh ~= nil then
+                    fh:close()
+                    return path
+                end
+            end
         end
     end
-    return dir.."\\"..sec.."_"..cls.."_"..tf..".csv"
+    local fallback = dir.."\\"..sec.."_"..cls.."_"..tf..".csv"
+    if tf ~= "D1" then
+        for i = 1, #names do
+            if names[i] ~= nil and names[i] ~= "" then
+                for c = 1, #classes do
+                    local d1 = dir.."\\"..names[i].."_"..classes[c].."_D1.csv"
+                    local fh = io.open(d1, "r")
+                    if fh ~= nil then
+                        fh:close()
+                        return d1
+                    end
+                end
+            end
+        end
+    end
+    return fallback
 end
 
 local function normKey(dt)
@@ -161,6 +200,16 @@ local function normKey(dt)
     return dt
 end
 
+local function barYear(t)
+    local y = tonumber(t and t.year) or 0
+    if y < 100 then
+        y = y + 2000
+    elseif y < 1900 then
+        y = y + 1900
+    end
+    return y
+end
+
 local function barKey(index)
     local t = _G.T and _G.T(index)
     if t == nil then
@@ -168,7 +217,7 @@ local function barKey(index)
     end
     return string.format(
         "%02d.%02d.%04d %02d:%02d:00",
-        t.day or 0, t.month or 0, t.year or 0,
+        t.day or 0, t.month or 0, barYear(t),
         t.hour or 0, t.min or 0
     )
 end
@@ -219,6 +268,10 @@ local function loadMarks(path)
             if key ~= nil then
                 byKey[key] = row
             end
+            local dk = string.match(dt, "^(%d%d%.%d%d%.%d%d%d%d)")
+            if dk ~= nil then
+                byKey[dk] = row
+            end
             n = n + 1
             lastDt = dt
         end
@@ -250,11 +303,19 @@ local function valuesFor(index, byKey)
     end
     local key = barKey(index)
     local row = key ~= nil and byKey[key] or nil
+    if row == nil and key ~= nil then
+        local tf = chartTfTag()
+        if tf == "D1" or tf == "NA" or string.match(tf, "^D%d+$") then
+            row = byKey[string.match(key, "^(%d%d%.%d%d%.%d%d%d%d)")]
+        end
+    end
     if row == nil or row.setup == "none" then
         return buy, sell, buy1, sell1, buy2, sell2
     end
+    local tf = chartTfTag()
     local onsetOnly = tonumber(_G.Settings.OnsetOnly) or 1
-    if onsetOnly ~= 0 and row.onset ~= 1 then
+    -- Daily bars often do not share 00:00 with CSV; still show the setup bar, not only onset.
+    if onsetOnly ~= 0 and row.onset ~= 1 and not (tf == "D1" or tf == "NA" or string.match(tf, "^D%d+$")) then
         return buy, sell, buy1, sell1, buy2, sell2
     end
     local y = markerY(index, row.setup)
@@ -307,9 +368,26 @@ local function Algo()
     local lastCheck = 0
     local prevSize = 0
 
+    local function writeDebug(path, n)
+        local ds = _G.getDataSourceInfo and _G.getDataSourceInfo() or {}
+        local nBars = _G.Size and _G.Size() or 0
+        local fh = io.open(marksDir().."\\_overlay_debug.txt", "w")
+        if fh == nil then
+            return
+        end
+        fh:write("sec=", tostring(ds.sec_code), " class=", tostring(ds.class_code), "\n")
+        fh:write("interval=", tostring(ds.interval), " tf=", tostring(chartTfTag()), "\n")
+        fh:write("path=", tostring(path), " rows=", tostring(n), " size=", tostring(nBars), "\n")
+        if nBars > 0 and _G.T then
+            fh:write("T1=", tostring(barKey(1)), " Tn=", tostring(barKey(nBars)), "\n")
+        end
+        fh:close()
+    end
+
     local function refresh()
         local path = marksPath()
         local map, n, lastDt = loadMarks(path)
+        writeDebug(path, n)
         if map == nil or (n == 0 and loadedLast ~= "") then
             return false
         end
@@ -320,21 +398,23 @@ local function Algo()
     end
 
     return function(index)
-        if not MARKS_TF[chartTfTag()] then
-            return nil, nil, nil, nil, nil, nil
-        end
-        if index == 1 then
+        local tf = chartTfTag()
+        if index == 1 or loadedLast == "" then
             refresh()
+            paintAll(byKey)
             prevSize = _G.Size and _G.Size() or 0
+        end
+        if not MARKS_TF[tf] and (byKey == nil or next(byKey) == nil) then
+            return nil, nil, nil, nil, nil, nil
         end
         local nBars = _G.Size and _G.Size() or 0
         if index == nBars and nBars > 0 then
-            if prevSize > 0 and nBars > prevSize then
-                for i = prevSize, nBars - 1 do
-                    paintBar(i, byKey)
-                end
+            -- Size change (new forming bar, extra history) can wipe line buffers.
+            -- Repaint all marks, not only the new tail, or older buy/sell points vanish.
+            if prevSize ~= nBars then
+                paintAll(byKey)
+                prevSize = nBars
             end
-            prevSize = nBars
             local now = os_time()
             local wait = tonumber(_G.Settings.ReloadSec) or 15
             if wait < 1 then wait = 1 end

@@ -46,8 +46,9 @@ CHART_TF_BY_SMALL = {
     "Mn20": "M10",
     "H1": "M30",
     "H12": "H4",
+    "D5": "D1",
 }
-TF_ORDER = ["M1", "M10", "M30", "H4"]
+TF_ORDER = ["M1", "M10", "M30", "H4", "D1"]
 
 
 def parse_entries(data: bytes, start: int, end: int) -> list[tuple[int, str, object]]:
@@ -156,7 +157,7 @@ def main() -> None:
 
     lines = [
         "; *RPM_TF_Up_5 live settings from finam.wnd",
-        "; one section per chart timeframe (M1 / M10 / M30 / H4)",
+        "; one section per chart timeframe (M1 / M10 / M30 / H4 / D1)",
         "",
     ]
     for tf in TF_ORDER:

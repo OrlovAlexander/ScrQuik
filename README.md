@@ -43,21 +43,24 @@ docs/                документация
 
 ## Раскладка на графике
 
-На M1, M10, M30, H4:
+На M1, M10, M30, H4, D1:
 
 - один `*RPM_TF_Current`
 - один `*RPM_TF_Up_5`
 
-`*One2One_121` — **только M30**. `*AnalyzerMarks` — M1, M10, M30 и H4, на ценовой панели. `*AnalyzerZigZag` — M1, M10 и M30, на ценовой панели.
+`*One2One_121` — **только M30**. `*AnalyzerMarks` — M1, M10, M30, H4 и D1, на ценовой панели. `*AnalyzerZigZag` — M1, M10 и M30, на ценовой панели.
 
 Слои RPM-up (Small / Middle / Up):
 
-| график | Small | Middle | Up (hist на M1/M30/H4) |
+| график | Small | Middle | Up (hist на M1/M30/H4/D1) |
 |---|---|---|---|
 | M1 | Mn5 | Mn10 | Mn20 |
 | M10 | Mn20 (hist) | Mn30 | H2 |
 | M30 | H1 | H2 | H4 |
 | H4 | H12 | D1 | W1 |
+| D1 | D5 | W2 | W5 |
+
+D2–D5 и W2–W5 в анализаторе режутся так же, как Lua (unix-дни), чтобы гистограмма D1 совпадала с графиком.
 
 ## Анализатор
 
@@ -72,7 +75,7 @@ python -m analyzer --marks
 python -m analyzer --watch
 ```
 
-`--watch` не закрывать: простой **11 с**, пачка грязных тикеров до **21 с**, сначала M1, потом M10, M30, H4.
+`--watch` не закрывать: простой **11 с**, пачка грязных тикеров до **21 с**, сначала M1, потом M10, M30, H4, D1.
 
 Зигзаг на графике: [docs/analyzer-waves.md](docs/analyzer-waves.md) (`--watch-waves`, `*AnalyzerZigZag`).
 Подробности меток и сетапов: [docs/analyzer-marks.md](docs/analyzer-marks.md).

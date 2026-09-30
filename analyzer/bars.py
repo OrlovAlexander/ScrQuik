@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 CHART_TFS = ("M1", "M10", "M30", "H4")
+KNOWN_TFS = CHART_TFS + ("D1",)
 BARS_DIR = Path(r"C:\QuikFinam\LuaScripts\barsSaver\data")
 SEC_FILE_ALIASES = {
     ("CNY12.26", "SPBFUT"): ("CR", "SPBFUT"),
@@ -114,6 +115,7 @@ def load_instrument(
     data_dir: Path = BARS_DIR,
     tfs: tuple[str, ...] | None = None,
     max_bars: int | dict[str, int] | None = None,
+    skip_missing: bool = False,
 ) -> dict[str, list[Bar]]:
     out: dict[str, list[Bar]] = {}
     missing: list[str] = []
@@ -124,7 +126,7 @@ def load_instrument(
             continue
         limit = max_bars.get(tf) if isinstance(max_bars, dict) else max_bars
         out[tf] = load_csv(path, max_bars=limit)
-    if missing:
+    if missing and not skip_missing:
         raise FileNotFoundError("missing barsSaver CSV: " + "; ".join(missing))
     return out
 
@@ -138,7 +140,7 @@ def parse_bars_filename(name: str) -> tuple[str, str, str] | None:
     if not name.endswith("_.csv"):
         return None
     core = name[:-5]
-    for tf in sorted(CHART_TFS, key=len, reverse=True):
+    for tf in sorted(KNOWN_TFS, key=len, reverse=True):
         token = "_" + tf
         if core.endswith(token):
             head = core[: -len(token)]

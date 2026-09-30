@@ -12,8 +12,9 @@ from analyzer.bars import BARS_DIR, Bar, csv_live_sec, csv_path, list_instrument
 from analyzer.combo import tf_series
 
 MARKS_DIR = Path(r"C:\QuikFinam\LuaIndicators\analyzer_marks")
-MARKS_TFS = ("M1", "M10", "M30", "H4")
-MARKS_MAX_BARS = {"M1": 6000, "M10": 2000, "M30": 2000, "H4": 2000}
+MARKS_CORE_TFS = ("M1", "M10", "M30", "H4")
+MARKS_TFS = MARKS_CORE_TFS + ("D1",)
+MARKS_MAX_BARS = {"M1": 6000, "M10": 2000, "M30": 2000, "H4": 2000, "D1": 800}
 DT_FMT = "%d.%m.%Y %H:%M:%S"
 SETUP_CODE = {"none": 0, "buy": 1, "sell": 2, "buy1": 3, "sell1": 4, "buy2": 5, "sell2": 6}
 _WRITE_TRIES = 6
@@ -119,11 +120,14 @@ def export_marks(
         data_root,
         tfs=chosen,
         max_bars=MARKS_MAX_BARS,
+        skip_missing=True,
     )
     names = mark_sec_names(sec, class_code, data_root)
     files: dict[str, str] = {}
     counts: dict[str, dict] = {}
     for tf in chosen:
+        if tf not in books:
+            continue
         bars: list[Bar] = books[tf]
         rows = mark_rows(tf_series(bars, tf, setups_only=True))
         written = None
@@ -196,7 +200,11 @@ def export_all_marks(
 ) -> list[dict]:
     run = exporter or export_marks
     emit = log or (lambda msg: print(msg, flush=True))
-    items = list_instruments(data_dir or BARS_DIR, class_code=class_code, tfs=tfs or MARKS_TFS)
+    items = list_instruments(
+        data_dir or BARS_DIR,
+        class_code=class_code,
+        tfs=MARKS_CORE_TFS if tfs in (None, MARKS_TFS) else tfs,
+    )
     emit(f"marks all  n={len(items)}  class={class_code or '*'}")
     reports: list[dict] = []
     for sec, cls in items:
@@ -246,12 +254,16 @@ def watch_marks(
             if sec:
                 universe = [(sec, class_code or "TQBR")]
             else:
-                universe = list_instruments(bars_root, class_code=class_code, tfs=chosen)
+                list_tfs = MARKS_CORE_TFS if chosen == MARKS_TFS else chosen
+                universe = list_instruments(bars_root, class_code=class_code, tfs=list_tfs)
             dirty: list[tuple[str, str, str, tuple]] = []
             dirty_by_tf: dict[str, int] = {tf: 0 for tf in chosen}
             for tf in chosen:
                 for name, cls in universe:
                     fp = bars_fingerprint(name, cls, bars_root, (tf,))
+                    if fp == ((tf, 0, 0),):
+                        last[(name, cls, tf)] = fp
+                        continue
                     if fp != last.get((name, cls, tf)):
                         dirty.append((name, cls, tf, fp))
                         dirty_by_tf[tf] = dirty_by_tf.get(tf, 0) + 1
@@ -277,7 +289,7 @@ def watch_marks(
                     exports += 1
                     done += 1
                 except FileNotFoundError as exc:
-                    last.pop((name, cls, tf), None)
+                    last[(name, cls, tf)] = fp
                     emit(f"watch wait {name} {tf}: {exc}")
                 except Exception as exc:
                     emit(f"watch error {name} {tf}: {exc}")

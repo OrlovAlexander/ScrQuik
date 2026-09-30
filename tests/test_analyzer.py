@@ -48,6 +48,89 @@ class FirGoldTests(unittest.TestCase):
         self.assertTrue(all(r["rpm"] is not None for r in rows[5:]))
 
 
+class DayAggTests(unittest.TestCase):
+    def _days(self, n: int, start: datetime | None = None) -> list[Bar]:
+        t0 = start or datetime(2026, 1, 1, 10, 0)
+        return [Bar(t0 + timedelta(days=i), 1, 2, 0, 1.0 + i) for i in range(n)]
+
+    def test_d1_one_bar_per_calendar_day(self):
+        from analyzer.rpm_up import AggSeries
+
+        series = AggSeries("D1")
+        for bar in self._days(5):
+            series.set_price(bar)
+        self.assertEqual(len(series.bars), 5)
+
+    def test_dn_uses_n_day_slots(self):
+        from analyzer.rpm_up import AggSeries, DAY_SLOT, _day_slot
+
+        start = datetime(2026, 1, 1, 10, 0)
+        bars = self._days(12, start)
+        for tf, n in DAY_SLOT.items():
+            series = AggSeries(tf)
+            for bar in bars:
+                series.set_price(bar)
+            slots = {_day_slot(bar.dt, tf) for bar in bars}
+            self.assertEqual(len(series.bars), len(slots), tf)
+
+    def test_d2_merges_intraday_bars(self):
+        from analyzer.rpm_up import AggSeries, _day_slot
+
+        bars = []
+        for d in range(4):
+            for hour in (4, 8, 12, 16):
+                bars.append(Bar(datetime(2026, 1, 1 + d, hour, 0), 1, 2, 0, 1.0))
+        series = AggSeries("D2")
+        for bar in bars:
+            series.set_price(bar)
+        slots = {_day_slot(bar.dt, "D2") for bar in bars}
+        self.assertEqual(len(series.bars), len(slots))
+        self.assertLess(len(series.bars), 4)
+
+
+class WeekAggTests(unittest.TestCase):
+    def test_w1_new_bar_on_monday(self):
+        from analyzer.rpm_up import AggSeries
+
+        # 2026-01-01 is Thursday; first Monday is 2026-01-05.
+        bars = [
+            Bar(datetime(2026, 1, 1, 10, 0), 1, 2, 0, 1.0),
+            Bar(datetime(2026, 1, 2, 10, 0), 1, 2, 0, 1.1),
+            Bar(datetime(2026, 1, 5, 10, 0), 1, 2, 0, 1.2),
+            Bar(datetime(2026, 1, 6, 10, 0), 1, 2, 0, 1.3),
+            Bar(datetime(2026, 1, 12, 10, 0), 1, 2, 0, 1.4),
+        ]
+        series = AggSeries("W1")
+        for bar in bars:
+            series.set_price(bar)
+        self.assertEqual(len(series.bars), 3)
+
+    def test_wn_uses_n_week_slots(self):
+        from analyzer.rpm_up import AggSeries, WEEK_SLOT, _week_slot
+
+        start = datetime(2026, 1, 5, 10, 0)
+        bars = [Bar(start + timedelta(days=i), 1, 2, 0, 1.0) for i in range(28)]
+        for tf in ("W2", "W3", "W4", "W5"):
+            series = AggSeries(tf)
+            for bar in bars:
+                series.set_price(bar)
+            slots = {_week_slot(bar.dt, tf) for bar in bars}
+            self.assertEqual(len(series.bars), len(slots), tf)
+            self.assertLess(len(series.bars), 28, tf)
+
+    def test_d5_w5_slots_match_lua_unix_epoch(self):
+        from analyzer.rpm_up import _day_slot, _week_slot
+
+        # Lua D5: 10–14 Aug 2026 one slot, 17–19 next, 20–24 next.
+        self.assertEqual(_day_slot(datetime(2026, 8, 10), "D5"), _day_slot(datetime(2026, 8, 14), "D5"))
+        self.assertNotEqual(_day_slot(datetime(2026, 8, 14), "D5"), _day_slot(datetime(2026, 8, 17), "D5"))
+        self.assertEqual(_day_slot(datetime(2026, 8, 17), "D5"), _day_slot(datetime(2026, 8, 19), "D5"))
+        self.assertNotEqual(_day_slot(datetime(2026, 8, 19), "D5"), _day_slot(datetime(2026, 8, 20), "D5"))
+        # Lua W5: 10–21 Aug 2026 one slot, 24 Aug next.
+        self.assertEqual(_week_slot(datetime(2026, 8, 10), "W5"), _week_slot(datetime(2026, 8, 21), "W5"))
+        self.assertNotEqual(_week_slot(datetime(2026, 8, 21), "W5"), _week_slot(datetime(2026, 8, 24), "W5"))
+
+
 class IniLayoutTests(unittest.TestCase):
     def test_up_sections_match_chart_tf(self):
         expect = {
@@ -55,6 +138,7 @@ class IniLayoutTests(unittest.TestCase):
             "M10": ("Mn20", "Mn30", "H2"),
             "M30": ("H1", "H2", "H4"),
             "H4": ("H12", "D1", "W1"),
+            "D1": ("D5", "W2", "W5"),
         }
         for tf, layers in expect.items():
             st = load_up_settings(tf)
@@ -65,6 +149,7 @@ class IniLayoutTests(unittest.TestCase):
         self.assertEqual(hist_layer_names(load_up_settings("M10")), ("small",))
         self.assertEqual(hist_layer_names(load_up_settings("M30")), ("up",))
         self.assertEqual(hist_layer_names(load_up_settings("H4")), ("up",))
+        self.assertEqual(hist_layer_names(load_up_settings("D1")), ("up",))
 
 
 @unittest.skipUnless(
@@ -647,7 +732,7 @@ class ComboTests(unittest.TestCase):
         self.assertEqual(rows[1]["code"], 1)
         self.assertEqual(rows[3]["code"], 2)
         self.assertEqual(rows[5]["code"], 3)
-        self.assertEqual(MARKS_TFS, ("M1", "M10", "M30", "H4"))
+        self.assertEqual(MARKS_TFS, ("M1", "M10", "M30", "H4", "D1"))
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -719,6 +804,7 @@ class ComboTests(unittest.TestCase):
         self.assertEqual(parse_bars_filename("GAZP_TQBR_M10_.csv"), ("GAZP", "TQBR", "M10"))
         self.assertEqual(parse_bars_filename("X5_TQBR_M1_.csv"), ("X5", "TQBR", "M1"))
         self.assertEqual(parse_bars_filename("CNY12.26_SPBFUT_M1_.csv"), ("CNY12.26", "SPBFUT", "M1"))
+        self.assertEqual(parse_bars_filename("CR_SPBFUT_D1_.csv"), ("CR", "SPBFUT", "D1"))
         self.assertIsNone(parse_bars_filename("readme.csv"))
         from analyzer.bars import csv_path as bars_csv
         cr = bars_csv("CR", "SPBFUT", "M1")

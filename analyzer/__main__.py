@@ -28,7 +28,7 @@ def _default(obj):
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Analyze one instrument across M1/M10/M30/H4")
+    p = argparse.ArgumentParser(description="Analyze one instrument across M1/M10/M30/H4/D1")
     p.add_argument("--sec", default=None, help="Ticker; omit with --marks/--watch to process every barsSaver instrument")
     p.add_argument("--class-code", default=None, help="Class; default TQBR, SPBFUT for CNY*; omit with --watch to include every class")
     p.add_argument("--json", action="store_true")

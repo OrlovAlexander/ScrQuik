@@ -483,6 +483,24 @@ local HOUR_TF_SLOT = {
     H12 = 12,
 }
 
+-- D1 = one calendar day; D2..D5 = N calendar days (slot like H2/H4).
+local DAY_TF_SLOT = {
+    D1 = 1,
+    D2 = 2,
+    D3 = 3,
+    D4 = 4,
+    D5 = 5,
+}
+
+-- W1 = Monday week; W2..W5 = N Monday weeks.
+local WEEK_TF_SLOT = {
+    W1 = 1,
+    W2 = 2,
+    W3 = 3,
+    W4 = 4,
+    W5 = 5,
+}
+
 local function hourSlot(hour, tf)
     local n = HOUR_TF_SLOT[tf]
     if not n then
@@ -496,6 +514,70 @@ end
 
 local function isHourTf(tf)
     return HOUR_TF_SLOT[tf] ~= nil
+end
+
+local function isDayTf(tf)
+    return DAY_TF_SLOT[tf] ~= nil
+end
+
+local function dayNumber(dt)
+    if dt == nil then
+        return 0
+    end
+    local t = {
+        year = dt.year,
+        month = dt.month,
+        day = dt.day,
+        hour = 12,
+        min = 0,
+        sec = 0,
+    }
+    return floor(os_time(t) / 86400)
+end
+
+local function daySlot(dt, tf)
+    local n = DAY_TF_SLOT[tf]
+    if not n then
+        return nil
+    end
+    return floor(dayNumber(dt) / n)
+end
+
+local function isNewDailyBar(tf, upT, crT)
+    if not DAY_TF_SLOT[tf] then
+        return false
+    end
+    return daySlot(upT, tf) ~= daySlot(crT, tf)
+end
+
+local function isWeekTf(tf)
+    return WEEK_TF_SLOT[tf] ~= nil
+end
+
+local function weekNumber(dt)
+    -- Monday-based week: unix day 0 is Thursday 1970-01-01, Monday 1970-01-05 is 4.
+    return floor((dayNumber(dt) - 4) / 7)
+end
+
+local function weekSlot(dt, tf)
+    local n = WEEK_TF_SLOT[tf]
+    if not n then
+        return nil
+    end
+    return floor(weekNumber(dt) / n)
+end
+
+local function isNewWeeklyBar(tf, upT, crT)
+    local n = WEEK_TF_SLOT[tf]
+    if not n then
+        return false
+    end
+    if n == 1 then
+        return crT.week_day == 1 and (
+            upT.day ~= crT.day or upT.month ~= crT.month or upT.year ~= crT.year
+        )
+    end
+    return weekSlot(upT, tf) ~= weekSlot(crT, tf)
 end
 
 local function isMinuteTf(tf)
@@ -601,10 +683,10 @@ local function setFirstTime(tf, tfds, index, ds)
         if isHourBoundary(crT, tf) then
             setFirstBar = true;
         end
-        if (tf == "D1") then
+        if isDayTf(tf) then
             setFirstBar = true;
         end
-        if (tf == "W1") then
+        if isWeekTf(tf) then
             setFirstBar = true;
         end
         if (tf == "M1") then
@@ -691,13 +773,12 @@ local function setPrice(tf, tfds, index, ds)
         if (tf == "M1" and newMonth) then
             addNewBarInTfds = true;
         end
-        -- w1
-        -- myLog('setPrice; tf:'..tf..' upT.week_day: '..upT.week_day..', crT.week_day: '..crT.week_day);
-        if (tf == "W1" and crT.week_day == 1 and newDay) then
+        -- w1, w2, w3, w4, w5
+        if isNewWeeklyBar(tf, upT, crT) then
             addNewBarInTfds = true;
         end
-        -- d1
-        if (tf == "D1" and newDay) then
+        -- d1, d2, d3, d4, d5
+        if isNewDailyBar(tf, upT, crT) then
             addNewBarInTfds = true;
         end
         -- h1, h2, h3, h4, h6, h8, h12 ? ????????? ?????? ???????
