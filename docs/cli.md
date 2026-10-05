@@ -8,12 +8,12 @@
 
 | флаг | что |
 |---|---|
-| `--sec TICKER` | инструмент. Без него у `--marks` / `--watch` / `--odds` / `--watch-odds` / `--train-net` / `--net` / `--watch-net` / `--watch-waves` — все тикеры barsSaver |
+| `--sec TICKER` | инструмент. Без него у `--marks` / `--watch` / `--odds` / `--watch-odds` / `--train-net` / `--net` / `--watch-net` — все тикеры barsSaver (у архивного `--watch-waves` — тоже) |
 | `--class-code CLASS` | класс. По умолчанию TQBR; имя на `CNY*` → SPBFUT. `--watch` без класса берёт и TQBR, и SPBFUT |
 | `--json` | печать JSON вместо текста. Нельзя с `--watch`, `--watch-waves`, `--watch-odds`, `--watch-net` |
 | `--poll N` | простой секунд между проверками barsSaver у watch-команд. По умолчанию **11**. Окно не закрывать. Пачка грязных тикеров до **21** с, очередь ТФ: M1 → M10 → M30 → H4 → D1 |
 
-`--sec` обязателен для снимка, `--combo`, `--m30`, `--waves`, `--pack-ahead`.
+`--sec` обязателен для снимка, `--combo`, `--m30`, `--pack-ahead` (и архивного `--waves`).
 
 ## Снимок и разбор в консоли
 
@@ -37,9 +37,9 @@
 | `python -m analyzer --watch` | живой оверлей меток: пересчёт при росте CSV barsSaver. Окно не закрывать |
 | `python -m analyzer --watch --sec CNY12.26` | то же, только этот тикер |
 
-## Волны (`*AnalyzerZigZag`)
+## Архив: волны (`*AnalyzerZigZag`)
 
-Отдельный анализатор, не сетапы buy/sell. Геометрия 1–5 — предположение по Кречетову, не копия стратегии. Подробнее: [analyzer-waves.md](analyzer-waves.md).
+**Архив.** Рудимент, **не развивать.** Подробнее: [analyzer-waves.md](analyzer-waves.md).
 
 | команда | что делает |
 |---|---|
@@ -89,9 +89,9 @@ CLI печатает предупреждение, что продолжение
 
 ## Служебное (не анализатор)
 
-Исследование 121. Живой индикатор и `analyzer/one2one.py` от этих прогонов **не зависят**. Подробнее: [tools/README.md](../tools/README.md).
+`extract_rpm_up_ini.py` ещё нужен для ini RPM-up. Остальное в `tools/one2one/` — **архив 121**, рудимент, не развивать. Подробнее: [tools/README.md](../tools/README.md).
 
 | команда | что делает |
 |---|---|
 | `python tools/one2one/extract_rpm_up_ini.py` | читает `C:\QuikFinam\finam.wnd`, пишет `config/RPM_TF_Up_5.ini` (секция D1 = пачка Small=`D5`) |
-| `python tools/one2one/move_stats.py --help` | подбор параметров 121; остальные `tools/one2one/sweep_*.py` — разовые прогоны исследования |
+| `python tools/one2one/move_stats.py --help` | архив: подбор параметров 121; `sweep_*.py` не развивать |

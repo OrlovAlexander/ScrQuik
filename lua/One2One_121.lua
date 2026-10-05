@@ -1,4 +1,5 @@
 --[[
+	Archive remnant. Do not extend One2One (121).
 	One2One (121) harmonic pattern indicator for QUIK
 	Based on ZigZag from smartZZ (nick-nh/qlua)
 

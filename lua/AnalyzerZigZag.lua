@@ -1,3 +1,4 @@
+-- Archive: --waves / *AnalyzerZigZag is a remnant. Do not extend.
 -- Overlay: zigzag legs from python -m analyzer --waves / --watch-waves
 -- CSV: LuaIndicators\analyzer_waves\{SEC}_{CLASS}_{TF}.csv
 -- Put this indicator on the price pane (same window as candles). M1, M10, M30.

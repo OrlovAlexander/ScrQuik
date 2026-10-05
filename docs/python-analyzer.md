@@ -7,8 +7,8 @@ Python считает те же линии, что Lua на графике QUIK.
 Как на живых графиках (правило `.cursor/rules/chart-tf-analysis.mdc`):
 
 - каждый ТФ: RPM-current + RPM-up;
-- 121 только на M30;
 - параметры up — из `config/RPM_TF_Up_5.ini`, секция по ТФ **графика**, не из дефолтов Lua и не по `sec_code`.
+- 121 и зигзаг — архив, на раскладку не ставить, не развивать.
 
 ## Модули
 
@@ -18,15 +18,15 @@ Python считает те же линии, что Lua на графике QUIK.
 | `analyzer/ema.py` | EMA |
 | `analyzer/rpm_current.py` | FIR 12 + EMA(90), расчёт со второй половины истории (`floor(n/2)+1`, как Lua) |
 | `analyzer/rpm_up.py` | агрегация Small/Middle/Up, гистограмма, дивер; D2–D5/W2–W5 — unix-слоты Lua |
-| `analyzer/settings.py` | `config/RPM_TF_Up_5.ini`, `config/One2One_121.ini` |
-| `analyzer/one2one.py` | 121 на M30 |
+| `analyzer/settings.py` | `config/RPM_TF_Up_5.ini`; `config/One2One_121.ini` — архив 121 |
+| `analyzer/one2one.py` | **архив:** 121 на M30; рудимент, не развивать |
 | `analyzer/neighbors.py` | закрытый бар младшего ТФ на момент старшего |
 | `analyzer/states.py` | теги vs0 / vs_ema / slope / ema_vs0 / ema_slope / ema_trend / hist |
 | `analyzer/combo.py` | сетапы buy/sell/buy1/sell1/buy2/sell2, дерево состояний |
 | `analyzer/price.py` | классификация хода цены |
 | `analyzer/snapshot.py` | снимок одного инструмента на M1/M10/M30/H4 (D1 — только метки `--watch` / `--marks`) |
 | `analyzer/marks.py` | CSV меток M1/M10/M30/H4/D1 и `--watch` |
-| `analyzer/waves.py` | зигзаг high/low и волны 1–5 (предположение по Кречетову, не копия стратегии); CSV для `*AnalyzerZigZag` |
+| `analyzer/waves.py` | **архив:** зигзаг и волны 1–5; CSV для `*AnalyzerZigZag`; рудимент, не развивать |
 | `analyzer/odds.py` | архив `--odds` (ведущий→M1), эволюционировал в `--net`; хелперы для net и pack-ahead |
 | `analyzer/pack_ahead.py` | похожая пачка формирующегося D1 на D1/H4/M30; исход — следующее закрытие D1 справа (без цепочки) |
 | `analyzer/net.py` | MLP: ствол общий, без `Wa`; точка — среднее трёх ahead; ahead — три головы (10/30/240 M1) |
@@ -45,7 +45,7 @@ D2–D5 и W2–W5 режутся **как в Lua**: unix-день `floor(os.tim
 
 `--combo` — уникальные деревья состояний H4→M1 и ходы M1 >= 1% (это не [парная связка](tag-packs.md)). `--m30` — ходы M30 >= 3% с состоянием M1/M10 на концах.
 
-`--waves` — отдельный анализатор, не сетапы buy/sell. Зигзаг по high/low закрытых баров, ноги между пивотами, левая и правая волна 1–5. Геометрия (канал, маятник, 4→5 не длиннее 2→3, цель линия 1–4, стоп за 5) — **предположение** по разборам Кречетова, не точная копия стратегии. Окна M1×120 / M10×90 / M30×90, история M1 1600 / M10 800 / M30 800. Пороги зигзага: M1 0.15%, M10 0.2%, M30 0.25% (эвристика репозитория). Пишет CSV для оверлея `*AnalyzerZigZag` (см. [analyzer-waves.md](analyzer-waves.md)). `--watch-waves` обновляет этот CSV при росте barsSaver.
+`--waves` / `--watch-waves` — **архив.** Рудимент, не развивать. Зигзаг и волны 1–5: [analyzer-waves.md](analyzer-waves.md).
 
 `--odds` / `--watch-odds` эволюционировали в `--net` / `--watch-net`. Кадр odds — ведущий ТФ → M1, не парные связки; оверлей не развивать. Архив: [analyzer-odds.md](analyzer-odds.md). Сеть: [analyzer-net.md](analyzer-net.md).
 

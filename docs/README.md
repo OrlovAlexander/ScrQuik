@@ -7,7 +7,7 @@
 | [tag-packs.md](tag-packs.md) | тег, пачка, парные связки D1–H4 / H4–M30 / M30–M10, цепочка, цепочка связок; поиск пачки D1 |
 | [python-analyzer.md](python-analyzer.md) | Python-анализатор: модули, сетапы, тесты |
 | [analyzer-marks.md](analyzer-marks.md) | метки на графике M1/M10/M30/H4/D1: barsSaver, `--watch`, `*AnalyzerMarks`, теги сетапов |
-| [analyzer-waves.md](analyzer-waves.md) | зигзаг на графике (`--watch-waves`, `*AnalyzerZigZag`); разметка 1–5 — предположение по Кречетову, не копия стратегии |
+| [analyzer-waves.md](analyzer-waves.md) | **архив:** зигзаг `--waves` / `*AnalyzerZigZag`; рудимент, не развивать |
 | [analyzer-odds.md](analyzer-odds.md) | `--odds` эволюционировал в сеть (`--net`); оверлей ведущий→M1 не развивать |
 | [analyzer-net.md](analyzer-net.md) | нейронка: три головы ahead; точка M10/M30 = среднее трёх softmax и порог; `Wa` нет |
 | [barsSaver.md](barsSaver.md) | установка и отличия от апстрима nick-nh |
