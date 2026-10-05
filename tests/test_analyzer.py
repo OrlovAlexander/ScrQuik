@@ -1207,5 +1207,1286 @@ class KrechetovWaveTests(unittest.TestCase):
         self.assertAlmostEqual(rows[0]["px5"], 12.738)
 
 
+class OddsTests(unittest.TestCase):
+    def test_chain_window_is_three_on_every_tf(self):
+        from analyzer.odds import CHAIN_BARS, CHAIN_WINDOW
+
+        self.assertEqual(CHAIN_BARS, 3)
+        for tf in ("M1", "M10", "M30", "H4", "D1"):
+            self.assertEqual(CHAIN_WINDOW[tf], 3)
+
+    def test_forming_d1_appends_unfinished_day(self):
+        from analyzer.odds import forming_d1
+
+        d1 = [Bar(datetime(2026, 9, 29), 12.0, 12.2, 11.9, 12.1)]
+        m1 = [
+            Bar(datetime(2026, 9, 30, 10, 0), 12.1, 12.3, 12.0, 12.2),
+            Bar(datetime(2026, 9, 30, 10, 1), 12.2, 12.4, 12.1, 12.25),
+        ]
+        out = forming_d1(d1, m1)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out[-1].dt, datetime(2026, 9, 30))
+        self.assertAlmostEqual(out[-1].o, 12.1)
+        self.assertAlmostEqual(out[-1].h, 12.4)
+        self.assertAlmostEqual(out[-1].l, 12.0)
+        self.assertAlmostEqual(out[-1].c, 12.25)
+
+    def test_forming_d1_refreshes_today_from_m1(self):
+        from analyzer.odds import forming_d1
+
+        d1 = [Bar(datetime(2026, 9, 30), 12.0, 12.2, 11.9, 12.1)]
+        m1 = [
+            Bar(datetime(2026, 9, 30, 10, 0), 12.05, 12.3, 12.0, 12.2),
+            Bar(datetime(2026, 9, 30, 18, 0), 12.2, 12.5, 12.1, 12.4),
+        ]
+        out = forming_d1(d1, m1)
+        self.assertEqual(len(out), 1)
+        self.assertAlmostEqual(out[-1].o, 12.05)
+        self.assertAlmostEqual(out[-1].h, 12.5)
+        self.assertAlmostEqual(out[-1].l, 12.0)
+        self.assertAlmostEqual(out[-1].c, 12.4)
+
+    def test_slot_open_midnight_aligned(self):
+        from analyzer.odds import slot_open
+
+        self.assertEqual(slot_open(datetime(2026, 10, 1, 11, 55), 10), datetime(2026, 10, 1, 11, 50))
+        self.assertEqual(slot_open(datetime(2026, 10, 1, 11, 55), 30), datetime(2026, 10, 1, 11, 30))
+        self.assertEqual(slot_open(datetime(2026, 10, 1, 11, 55), 240), datetime(2026, 10, 1, 8, 0))
+        self.assertEqual(slot_open(datetime(2026, 10, 1, 11, 55), 1440), datetime(2026, 10, 1))
+
+    def test_append_forming_from_m1(self):
+        from analyzer.odds import append_forming
+
+        m10 = [Bar(datetime(2026, 10, 1, 11, 40), 12.0, 12.1, 11.9, 12.05)]
+        m1 = [
+            Bar(datetime(2026, 10, 1, 11, 50), 12.05, 12.2, 12.0, 12.1),
+            Bar(datetime(2026, 10, 1, 11, 55), 12.1, 12.3, 12.05, 12.25),
+        ]
+        out = append_forming(m10, "M10", m1, datetime(2026, 10, 1, 11, 55))
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out[-1].dt, datetime(2026, 10, 1, 11, 50))
+        self.assertAlmostEqual(out[-1].o, 12.05)
+        self.assertAlmostEqual(out[-1].h, 12.3)
+        self.assertAlmostEqual(out[-1].c, 12.25)
+
+    def test_append_forming_refreshes_current_slot(self):
+        from analyzer.odds import append_forming
+
+        m10 = [Bar(datetime(2026, 10, 1, 11, 50), 12.0, 12.1, 11.9, 12.05)]
+        m1 = [Bar(datetime(2026, 10, 1, 11, 55), 12.1, 12.4, 12.0, 12.3)]
+        out = append_forming(m10, "M10", m1, datetime(2026, 10, 1, 11, 55))
+        self.assertEqual(len(out), 1)
+        self.assertAlmostEqual(out[-1].c, 12.3)
+        self.assertAlmostEqual(out[-1].h, 12.4)
+
+    def test_build_books_forming_chain_lead_to_m1(self):
+        from analyzer.odds import _build_books
+
+        m1 = [Bar(datetime(2026, 10, 1, 11, minute), 12.0, 12.1, 11.9, 12.05) for minute in range(50, 56)]
+        raw = {
+            "M1": m1,
+            "M10": [Bar(datetime(2026, 10, 1, 11, 40), 12.0, 12.1, 11.9, 12.0)],
+            "M30": [Bar(datetime(2026, 10, 1, 11, 0), 12.0, 12.2, 11.8, 12.0)],
+            "D1": [Bar(datetime(2026, 9, 30), 12.0, 12.2, 11.9, 12.1)],
+        }
+        books = _build_books(raw, "M30")
+        self.assertEqual(books["M30"]["packs"][-1]["dt"], datetime(2026, 10, 1, 11, 30))
+        self.assertEqual(books["M10"]["packs"][-1]["dt"], datetime(2026, 10, 1, 11, 50))
+        self.assertEqual(books["M1"]["packs"][-1]["dt"], datetime(2026, 10, 1, 11, 55))
+        self.assertEqual(books["D1"]["packs"][-1]["dt"], datetime(2026, 10, 1))
+
+    def test_odds_rows_writes_forming_zero_without_hold(self):
+        from analyzer.odds import odds_rows
+
+        m1 = [Bar(datetime(2026, 10, 1, 11, minute), 12.0, 12.1, 11.9, 12.05) for minute in range(50, 56)]
+        raw = {
+            "M1": m1,
+            "M10": [Bar(datetime(2026, 10, 1, 11, 40), 12.0, 12.1, 11.9, 12.0)],
+            "M30": [Bar(datetime(2026, 10, 1, 11, 0), 12.0, 12.2, 11.8, 12.0)],
+            "D1": [],
+        }
+        rows = odds_rows(raw, "M30")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[-1]["dt"], datetime(2026, 10, 1, 11, 30))
+        self.assertEqual(rows[-1]["forming"], 1)
+        self.assertEqual(rows[-1]["n"], 0)
+        self.assertAlmostEqual(rows[-1]["up"], rows[-1]["down"])
+        self.assertAlmostEqual(rows[-1]["up"], rows[-1]["flat"])
+        self.assertGreater(rows[-1]["up"], 20.0)
+        self.assertLess(rows[-1]["up"], 45.0)
+
+    def test_paint_shares_dampens_single_hit(self):
+        from analyzer.odds import blend_lines, paint_shares
+
+        one = paint_shares(["up"])
+        self.assertEqual(one["n"], 1)
+        self.assertLess(one["up"], 60.0)
+        self.assertGreater(one["down"], 20.0)
+        self.assertGreater(one["flat"], 20.0)
+        empty = paint_shares([])
+        self.assertEqual(empty["n"], 0)
+        self.assertAlmostEqual(empty["up"], empty["down"])
+        self.assertAlmostEqual(empty["up"], 100.0 / 3.0, places=4)
+        mixed = blend_lines({"up": 50.0, "down": 25.0, "flat": 25.0}, {"up": 100.0, "down": 0.0, "flat": 0.0})
+        self.assertLess(mixed["up"], 80.0)
+        self.assertGreater(mixed["down"], 10.0)
+
+    def test_at_or_before_can_return_last_bar(self):
+        from analyzer.odds import at_or_before_indices
+
+        times = [datetime(2026, 9, 29), datetime(2026, 9, 30)]
+        idx = at_or_before_indices([datetime(2026, 9, 30, 18, 0)], times)[0]
+        self.assertEqual(idx, 1)
+
+    def test_sim_field_and_shares(self):
+        from analyzer.odds import classify_outcome, clip_line, flat_threshold, sample_shares, sim_field
+
+        self.assertAlmostEqual(sim_field(-0.227, -0.385), 0.842, places=3)
+        self.assertEqual(classify_outcome(100.0, 100.2, 0.3), "flat")
+        self.assertEqual(classify_outcome(100.0, 100.4, 0.3), "up")
+        self.assertEqual(classify_outcome(100.0, 99.6, 0.3), "down")
+        self.assertEqual(clip_line(90.0), 90.0)
+        self.assertEqual(clip_line(40.0), 40.0)
+        self.assertEqual(clip_line(-10.0), 0.0)
+        self.assertAlmostEqual(flat_threshold([100.0, 100.1, 100.0, 100.2]), 0.025, places=3)
+        share = sample_shares(["up", "up", "down", "flat"])
+        self.assertEqual(share["n"], 4)
+        self.assertAlmostEqual(share["up"], 50.0)
+        self.assertAlmostEqual(share["down"], 25.0)
+
+    def _chain_item(
+        self,
+        small_rpm,
+        small_ema,
+        middle_rpm,
+        middle_ema,
+        d_rpm=0.2,
+        d_ema=0.05,
+        d_hist=0.03,
+        cur_rpm=0.5,
+        cur_ema=0.4,
+        prev_cur_rpm=None,
+        prev_cur_ema=None,
+        key=("a", "b", "c", "d", "e"),
+    ):
+        from analyzer.odds import pack_events, pack_layer_order, pack_mag_z, pack_order_z, pack_pos_z
+
+        scales = {
+            "current.rpm": 1.0,
+            "current.ema": 1.0,
+            "small.rpm": 1.0,
+            "small.ema": 1.0,
+            "middle.rpm": 1.0,
+            "middle.ema": 1.0,
+            "hist.hist": 1.0,
+        }
+        if prev_cur_rpm is None:
+            prev_cur_rpm = cur_rpm
+        if prev_cur_ema is None:
+            prev_cur_ema = cur_ema
+        layer = {
+            "rpm": small_rpm,
+            "ema": small_ema,
+            "hist": 0.1,
+            "d_rpm": d_rpm,
+            "d_ema": d_ema,
+            "d_hist": d_hist,
+        }
+        middle = {
+            "rpm": middle_rpm,
+            "ema": middle_ema,
+            "hist": 0.15,
+            "d_rpm": d_rpm,
+            "d_ema": d_ema,
+            "d_hist": d_hist,
+        }
+        pack = {
+            "current": {"rpm": cur_rpm, "ema": cur_ema, "d_rpm": d_rpm, "d_ema": d_ema, "d_hist": None},
+            "small": layer,
+            "middle": middle,
+            "hist": {"hist": 0.1, "d_rpm": None, "d_ema": None, "d_hist": d_hist},
+        }
+        prev = {
+            "current": {"rpm": prev_cur_rpm, "ema": prev_cur_ema, "d_rpm": d_rpm, "d_ema": d_ema, "d_hist": None},
+            "small": layer,
+            "middle": middle,
+            "hist": {"hist": 0.1, "d_rpm": None, "d_ema": None, "d_hist": d_hist},
+        }
+        events = pack_events(pack, prev, scales, "M30")
+        return {
+            "pos": pack_order_z(pack, scales, "M30"),
+            "layers": pack_layer_order(pack, scales, "M30"),
+            "geom": pack_pos_z(pack, scales, "M30"),
+            "mag": pack_mag_z(pack, scales, "M30"),
+            "current": events["current"],
+            "other": events["other"],
+            "key": key,
+        }
+
+    def test_chain_sim_positions_outrank_magnitudes(self):
+        from analyzer.odds import chain_characteristics_sim, chain_sim
+
+        live = self._chain_item(1.0, 0.2, 0.8, 0.3)
+        same = self._chain_item(1.0, 0.2, 0.8, 0.3)
+        flipped = self._chain_item(0.2, 1.0, 0.8, 0.3)
+        quiet = self._chain_item(1.0, 0.2, 0.8, 0.3, d_rpm=-2.0, d_ema=-2.0, d_hist=-2.0)
+        live_chain = [live, live]
+        self.assertGreaterEqual(chain_sim(live_chain, [same, same]), 0.60)
+        chars_flip = chain_characteristics_sim(live_chain, [flipped, flipped])
+        self.assertGreaterEqual(chars_flip["pos"], 0.60)
+        self.assertLess(chars_flip["layers"], 0.60)
+        self.assertGreaterEqual(chars_flip["mag"], 0.60)
+        self.assertEqual(chain_sim(live_chain, [flipped, flipped]), 0.0)
+        chars_mag = chain_characteristics_sim(live_chain, [quiet, quiet])
+        self.assertGreaterEqual(chars_mag["pos"], 0.60)
+        self.assertLess(chars_mag["mag"], 0.60)
+        self.assertEqual(chain_sim(live_chain, [quiet, quiet]), 0.0)
+
+    def test_chain_sim_pack_delta_threshold(self):
+        from analyzer.odds import chain_sim
+
+        a = ("a", "b", "c", "d", "e")
+        b = ("x", "b", "c", "d", "e")
+        c = ("y", "z", "p", "q", "r")
+        first = self._chain_item(1.0, 0.2, 0.8, 0.3, key=a)
+        second = self._chain_item(1.0, 0.2, 0.8, 0.3, key=b)
+        other = self._chain_item(1.0, 0.2, 0.8, 0.3, key=c)
+        self.assertGreaterEqual(chain_sim([first, second], [first, second]), 0.60)
+        self.assertEqual(chain_sim([first, second], [first, other]), 0.0)
+
+    def test_chain_sim_current_cross_and_dir(self):
+        from analyzer.odds import chain_characteristics_sim, chain_sim
+
+        crossed = self._chain_item(1.0, 0.2, 0.8, 0.3, cur_rpm=1.0, prev_cur_rpm=-1.0, cur_ema=0.2)
+        held = self._chain_item(1.0, 0.2, 0.8, 0.3, cur_rpm=1.0, prev_cur_rpm=0.9, cur_ema=0.2)
+        falling = self._chain_item(1.0, 0.2, 0.8, 0.3, cur_rpm=1.0, prev_cur_rpm=1.8, cur_ema=0.2)
+        live_chain = [crossed, crossed]
+        self.assertGreaterEqual(chain_sim(live_chain, [crossed, crossed]), 0.60)
+        chars_hold = chain_characteristics_sim(live_chain, [held, held])
+        self.assertGreaterEqual(chars_hold["pos"], 0.60)
+        self.assertLess(chars_hold["current"], 0.60)
+        self.assertEqual(chain_sim(live_chain, [held, held]), 0.0)
+        chars_dir = chain_characteristics_sim(live_chain, [falling, falling])
+        self.assertLess(chars_dir["current"], 0.60)
+        self.assertEqual(chain_sim(live_chain, [falling, falling]), 0.0)
+        same_cross = chain_characteristics_sim([held, held], [falling, falling])
+        self.assertGreaterEqual(same_cross["current"], 0.60)
+        self.assertIn("other", same_cross)
+
+    def _pack_feat(
+        self,
+        cur_rpm,
+        cur_ema,
+        prev_cur_rpm=None,
+        tf="D1",
+        ema_gap=None,
+        small_rpm=1.0,
+        small_ema=0.2,
+        middle_rpm=0.8,
+        middle_ema=0.3,
+        d_rpm=0.2,
+        d_ema=0.05,
+        d_hist=0.03,
+        close=12.0,
+        dt=None,
+    ):
+        from analyzer.odds import pack_feat
+
+        scales = {
+            "current.rpm": 1.0,
+            "current.ema": 1.0,
+            "small.rpm": 1.0,
+            "small.ema": 1.0,
+            "middle.rpm": 1.0,
+            "middle.ema": 1.0,
+            "hist.hist": 1.0,
+        }
+        if prev_cur_rpm is None:
+            prev_cur_rpm = cur_rpm
+        if ema_gap is not None:
+            cur_ema = cur_rpm - ema_gap
+        layer = {
+            "rpm": small_rpm,
+            "ema": small_ema,
+            "hist": 0.1,
+            "d_rpm": d_rpm,
+            "d_ema": d_ema,
+            "d_hist": d_hist,
+        }
+        middle = {
+            "rpm": middle_rpm,
+            "ema": middle_ema,
+            "hist": 0.15,
+            "d_rpm": d_rpm,
+            "d_ema": d_ema,
+            "d_hist": d_hist,
+        }
+        pack = {
+            "dt": dt or datetime(2026, 10, 1),
+            "c": close,
+            "current": {"rpm": cur_rpm, "ema": cur_ema, "d_rpm": d_rpm, "d_ema": d_ema, "d_hist": None},
+            "small": layer,
+            "middle": middle,
+            "hist": {"hist": 0.1, "d_rpm": None, "d_ema": None, "d_hist": d_hist},
+        }
+        prev = {
+            "current": {"rpm": prev_cur_rpm, "ema": cur_ema, "d_rpm": d_rpm, "d_ema": d_ema, "d_hist": None},
+            "small": layer,
+            "middle": middle,
+            "hist": {"hist": 0.1, "d_rpm": None, "d_ema": None, "d_hist": d_hist},
+        }
+        return pack_feat(pack, prev, scales, tf)
+
+    def test_pack_sim_trio_order_not_ema_gap(self):
+        from analyzer.odds import pack_sim
+
+        live = self._pack_feat(-0.8, -1.2)
+        near = self._pack_feat(-0.8, -2.4)
+        flipped = self._pack_feat(-0.8, -0.2)
+        self.assertGreaterEqual(pack_sim(near, live), 0.60)
+        self.assertEqual(pack_sim(flipped, live), 0.0)
+
+    def test_pack_sim_dir_is_mean_not_min(self):
+        from analyzer.odds import pack_sim
+
+        flat = self._pack_feat(-0.8, -1.2, prev_cur_rpm=-0.8)
+        rising = self._pack_feat(-0.8, -1.2, prev_cur_rpm=-1.0)
+        self.assertGreaterEqual(pack_sim(rising, flat), 0.60)
+
+    def test_pack_sim_strips_tf_for_h4_vs_d1(self):
+        from analyzer.odds import pack_sim
+
+        d1 = self._pack_feat(-0.8, -1.2, tf="D1")
+        h4 = self._pack_feat(-0.8, -1.2, tf="H4")
+        self.assertGreaterEqual(pack_sim(h4, d1), 0.60)
+
+    def test_next_d1_is_first_close_to_the_right(self):
+        from analyzer.pack_ahead import _next_d1
+
+        packs = [
+            {"dt": datetime(2026, 9, 1), "c": 13.0},
+            {"dt": datetime(2026, 9, 2), "c": 12.5},
+            {"dt": datetime(2026, 9, 3), "c": 12.0},
+        ]
+        nxt = _next_d1(packs, datetime(2026, 9, 1, 8, 0))
+        self.assertEqual(nxt["c"], 12.5)
+        self.assertIsNone(_next_d1(packs, datetime(2026, 9, 3, 20, 0)))
+
+    def test_pack_key_follows_rpm_sign(self):
+        from analyzer.odds import pack_key
+
+        scales = {
+            "current.rpm": 1.0,
+            "current.ema": 1.0,
+            "small.rpm": 1.0,
+            "small.ema": 1.0,
+            "middle.rpm": 1.0,
+            "middle.ema": 1.0,
+            "hist.hist": 1.0,
+        }
+
+        def pack(rpm: float) -> dict:
+            layer = {"rpm": rpm, "ema": rpm * 0.5, "hist": rpm, "d_rpm": 0.1, "d_ema": 0.0, "d_hist": 0.05}
+            return {
+                "current": layer,
+                "small": layer,
+                "middle": layer,
+                "hist": layer,
+                "hist_raw": {"hist": rpm, "hist_up": rpm if rpm > 0 else None, "hist_dw": None if rpm > 0 else rpm},
+            }
+
+        up_key = pack_key(pack(1.0), scales)
+        down_key = pack_key(pack(-1.0), scales)
+        self.assertNotEqual(up_key, down_key)
+        self.assertEqual(up_key, pack_key(pack(1.0), scales))
+
+    def test_odds_lead_tf_rejects_m1(self):
+        from analyzer.odds import BUNDLE_NAMES, BUNDLE_PAIRS, ODDS_DEAD_END, ODDS_LEAD_TFS, odds_rows
+
+        self.assertTrue(ODDS_DEAD_END)
+        self.assertEqual(ODDS_LEAD_TFS, ("M10", "M30", "H4"))
+        self.assertEqual(BUNDLE_PAIRS, (("D1", "H4"), ("H4", "M30"), ("M30", "M10")))
+        self.assertEqual(set(BUNDLE_NAMES.values()), {"связкаД1Н4", "связкаН4М30", "связкаМ30М10"})
+        self.assertNotIn(("M10", "M1"), BUNDLE_PAIRS)
+        self.assertNotIn(("D1", "M30"), BUNDLE_PAIRS)
+        with self.assertRaises(ValueError):
+            odds_rows({"M1": []}, "M1")
+
+    def test_write_odds_csv(self):
+        import tempfile
+
+        from analyzer.odds import format_odds_dt, write_odds_csv
+
+        t0 = datetime(2026, 9, 30, 10, 0)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "CR_SPBFUT_M30.csv"
+            write_odds_csv(
+                path,
+                [{"dt": t0, "up": 42.0, "down": 35.0, "flat": 23.0, "n": 12}],
+            )
+            text = path.read_text(encoding="utf-8")
+        self.assertIn("datetime;up;down;flat;n", text)
+        self.assertIn(format_odds_dt(t0) + ";42.00;35.00;23.00;12", text)
+
+    def test_watch_odds_on_m30_close(self):
+        import tempfile
+
+        from analyzer.odds import watch_odds
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            dest = data_dir / "odds"
+            (data_dir / "GAZP_TQBR_M30_.csv").write_text("hdr\n", encoding="utf-8")
+            (data_dir / "GAZP_TQBR_H4_.csv").write_text("hdr\n", encoding="utf-8")
+            calls: list[tuple] = []
+            sleeps = {"n": 0}
+
+            def exporter(sec, class_code, dest_dir=None, data_dir=None, tfs=None):
+                calls.append(tfs)
+                return {
+                    "sec": sec,
+                    "class_code": class_code,
+                    "dir": str(dest),
+                    "files": {},
+                    "counts": {},
+                }
+
+            def sleeper(_wait):
+                sleeps["n"] += 1
+                if sleeps["n"] == 1:
+                    (data_dir / "GAZP_TQBR_M30_.csv").write_text("hdr\nrow\n", encoding="utf-8")
+
+            def stop():
+                return sleeps["n"] >= 2
+
+            n = watch_odds(
+                "GAZP",
+                "TQBR",
+                dest_dir=dest,
+                data_dir=data_dir,
+                poll=1.0,
+                exporter=exporter,
+                sleeper=sleeper,
+                stop=stop,
+                log=lambda _m: None,
+            )
+            self.assertGreaterEqual(n, 1)
+            self.assertTrue(any("M30" in (tf or ()) for tf in calls))
+
+    def test_watch_odds_on_m1_tick(self):
+        import tempfile
+
+        from analyzer.odds import watch_odds
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            dest = data_dir / "odds"
+            (data_dir / "GAZP_TQBR_M1_.csv").write_text("hdr\n", encoding="utf-8")
+            calls: list[tuple] = []
+            sleeps = {"n": 0}
+
+            def exporter(sec, class_code, dest_dir=None, data_dir=None, tfs=None):
+                calls.append(tfs)
+                return {
+                    "sec": sec,
+                    "class_code": class_code,
+                    "dir": str(dest),
+                    "files": {},
+                    "counts": {},
+                }
+
+            def sleeper(_wait):
+                sleeps["n"] += 1
+                if sleeps["n"] == 1:
+                    (data_dir / "GAZP_TQBR_M1_.csv").write_text("hdr\nrow\n", encoding="utf-8")
+
+            def stop():
+                return sleeps["n"] >= 2
+
+            n = watch_odds(
+                "GAZP",
+                "TQBR",
+                dest_dir=dest,
+                data_dir=data_dir,
+                poll=1.0,
+                exporter=exporter,
+                sleeper=sleeper,
+                stop=stop,
+                log=lambda _m: None,
+            )
+            self.assertGreaterEqual(n, 1)
+            self.assertTrue(any(set(tf or ()) >= {"M10", "M30", "H4"} for tf in calls))
+
+    def test_export_odds_m1_maps_to_lead_tfs(self):
+        import tempfile
+
+        from analyzer.odds import export_odds
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            dest = Path(tmpdir) / "odds"
+            report = export_odds("GAZP", "TQBR", dest_dir=dest, data_dir=data_dir, tfs=("M1",))
+            self.assertEqual(set(report["files"]), {"M10", "M30", "H4"})
+
+    def test_watch_odds_one_compute_per_instrument(self):
+        import tempfile
+
+        from analyzer.odds import watch_odds
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            dest = data_dir / "odds"
+            for tf in ("M1", "M10", "M30", "H4"):
+                (data_dir / f"GAZP_TQBR_{tf}_.csv").write_text("hdr\n1\n", encoding="utf-8")
+            calls: list[tuple] = []
+            sleeps = {"n": 0}
+
+            def exporter(sec, class_code, dest_dir=None, data_dir=None, tfs=None):
+                calls.append(tfs)
+                return {
+                    "sec": sec,
+                    "class_code": class_code,
+                    "dir": str(dest),
+                    "files": {},
+                    "counts": {},
+                }
+
+            def sleeper(_wait):
+                sleeps["n"] += 1
+
+            def stop():
+                return sleeps["n"] >= 1
+
+            n = watch_odds(
+                "GAZP",
+                "TQBR",
+                dest_dir=dest,
+                data_dir=data_dir,
+                poll=1.0,
+                exporter=exporter,
+                sleeper=sleeper,
+                stop=stop,
+                log=lambda _m: None,
+            )
+            self.assertEqual(n, 1)
+            self.assertEqual(calls, [("M10", "M30", "H4")])
+
+
+class NetTests(unittest.TestCase):
+    def test_dims_and_empty_pack(self):
+        from analyzer.net import BUNDLE_PAIRS, CHAIN_BARS, FRAME_DIM, IN_DIM, TF_DIM, pack_vec
+
+        self.assertEqual(TF_DIM, 34)
+        self.assertEqual(CHAIN_BARS, 3)
+        self.assertEqual(BUNDLE_PAIRS, (("D1", "H4"), ("H4", "M30"), ("M30", "M10")))
+        self.assertEqual(FRAME_DIM, TF_DIM * CHAIN_BARS * 2)
+        self.assertEqual(IN_DIM, FRAME_DIM)
+        self.assertEqual(IN_DIM, 204)
+        zeros = pack_vec(None, None, [], 0, {})
+        self.assertEqual(len(zeros), TF_DIM)
+        self.assertTrue(all(v == 0.0 for v in zeros))
+
+    def test_chain_pack_vecs_three_bars(self):
+        from analyzer.net import TF_DIM, _chain_pack_vecs
+
+        ok = [0.0] * (TF_DIM - 1) + [1.0]
+        miss = [0.0] * TF_DIM
+        a = [float(i) for i in range(TF_DIM - 1)] + [1.0]
+        b = [float(i + 10) for i in range(TF_DIM - 1)] + [1.0]
+        c = [float(i + 20) for i in range(TF_DIM - 1)] + [1.0]
+        chained = _chain_pack_vecs([a, b, c], 2)
+        self.assertEqual(len(chained), TF_DIM * 3)
+        self.assertEqual(chained[:TF_DIM], a)
+        self.assertEqual(chained[TF_DIM : 2 * TF_DIM], b)
+        self.assertEqual(chained[2 * TF_DIM :], c)
+        padded = _chain_pack_vecs([ok], 0)
+        self.assertEqual(padded[:TF_DIM], miss)
+        self.assertEqual(padded[TF_DIM : 2 * TF_DIM], miss)
+        self.assertEqual(padded[2 * TF_DIM :], ok)
+        self.assertIsNone(_chain_pack_vecs([miss], 0))
+
+    def test_frame_at_three_bundle_chains(self):
+        from analyzer.net import FRAME_DIM, IN_DIM, TF_DIM, _bundles_at
+
+        def pack(n: float, ok: float = 1.0) -> list[float]:
+            return [n] * (TF_DIM - 1) + [ok]
+
+        vecs = {
+            "D1": [pack(1), pack(2), pack(3)],
+            "H4": [pack(4), pack(5), pack(6)],
+            "M30": [pack(7), pack(8), pack(9)],
+            "M10": [pack(10), pack(11), pack(12)],
+        }
+        align = {"D1": [2], "H4": [2], "M30": [2], "M10": [2]}
+        bundles = _bundles_at(vecs, align, 0)
+        self.assertEqual(len(bundles), 3)
+        self.assertTrue(all(len(part) == IN_DIM == FRAME_DIM for part in bundles))
+        d1h4 = [bundles[0][i * TF_DIM] for i in range(6)]
+        h4m30 = [bundles[1][i * TF_DIM] for i in range(6)]
+        m30m10 = [bundles[2][i * TF_DIM] for i in range(6)]
+        self.assertEqual(d1h4, [1, 2, 3, 4, 5, 6])
+        self.assertEqual(h4m30, [4, 5, 6, 7, 8, 9])
+        self.assertEqual(m30m10, [7, 8, 9, 10, 11, 12])
+        bad = dict(vecs)
+        bad["D1"] = [pack(1, ok=0.0)]
+        left = _bundles_at(bad, {"D1": [0], "H4": [2], "M30": [2], "M10": [2]}, 0)
+        self.assertEqual(len(left), 2)
+
+    def test_bundle_ahead_clocks_and_m5(self):
+        from datetime import datetime
+
+        from analyzer.bars import Bar
+        from analyzer.net import BUNDLE_AHEAD, ahead_horizon_m1, bars_from_m1
+
+        self.assertEqual(BUNDLE_AHEAD[("M30", "M10")], {"clock": "M1", "period": 1, "bars": 10})
+        self.assertEqual(BUNDLE_AHEAD[("H4", "M30")], {"clock": "M5", "period": 5, "bars": 6})
+        self.assertEqual(BUNDLE_AHEAD[("D1", "H4")], {"clock": "M30", "period": 30, "bars": 8})
+        self.assertEqual(ahead_horizon_m1(("M30", "M10")), 10)
+        self.assertEqual(ahead_horizon_m1(("H4", "M30")), 30)
+        self.assertEqual(ahead_horizon_m1(("D1", "H4")), 240)
+        t0 = datetime(2026, 10, 2, 10, 0)
+        m1 = [
+            Bar(dt=t0.replace(minute=t0.minute + i), o=1.0 + i, h=2.0 + i, l=0.5, c=1.5 + i)
+            for i in range(12)
+        ]
+        m5 = bars_from_m1(m1, 5)
+        self.assertEqual(len(m5), 3)
+        self.assertEqual(m5[0].dt, t0)
+        self.assertEqual(m5[0].o, 1.0)
+        self.assertEqual(m5[0].c, 1.5 + 4)
+        self.assertEqual(m5[0].h, 2.0 + 4)
+
+    def test_ahead_pair_for_chart_tf(self):
+        from analyzer.net import BUNDLE_PAIRS, N_AHEAD_HEADS, ahead_head_index, ahead_pair_for_tf
+
+        self.assertEqual(N_AHEAD_HEADS, 3)
+        self.assertEqual(ahead_head_index(("D1", "H4")), 0)
+        self.assertEqual(ahead_head_index(("H4", "M30")), 1)
+        self.assertEqual(ahead_head_index(("M30", "M10")), 2)
+        self.assertEqual(ahead_pair_for_tf("M1"), ("M30", "M10"))
+        self.assertEqual(ahead_pair_for_tf("M10"), ("M30", "M10"))
+        self.assertEqual(ahead_pair_for_tf("M30"), ("H4", "M30"))
+        self.assertEqual(ahead_pair_for_tf("H4"), ("D1", "H4"))
+        self.assertEqual(ahead_pair_for_tf("D1"), ("D1", "H4"))
+        self.assertEqual(BUNDLE_PAIRS[ahead_head_index(ahead_pair_for_tf("M10"))], ("M30", "M10"))
+
+    def test_replay_h4_forming_does_not_see_later_slot_high(self):
+        from analyzer.net import TF_DIM, _chain_forming, build_books
+        from analyzer.tf_from_m1 import closed_bars_from_m1, replay_tf_book, verify_closed_csv
+
+        t0 = datetime(2026, 10, 1, 4, 0)
+        m1 = []
+        for i in range(240):
+            m1.append(Bar(t0 + timedelta(minutes=i), 10.0, 10.2, 9.9, 10.0))
+        slot2 = datetime(2026, 10, 1, 8, 0)
+        for i in range(240):
+            high = 10.2 if i < 120 else 20.0
+            close = 10.0 if i < 120 else 19.5
+            m1.append(Bar(slot2 + timedelta(minutes=i), 10.0, high, 9.9, close))
+        csv_h4 = [
+            Bar(t0, 10.0, 10.2, 9.9, 10.0),
+            Bar(slot2, 10.0, 20.0, 9.9, 19.5),
+        ]
+        closed = closed_bars_from_m1(m1, 240)
+        self.assertEqual(len(closed), 2)
+        self.assertAlmostEqual(closed[1].h, 20.0)
+        self.assertEqual(verify_closed_csv(closed, csv_h4, 240)["mismatch"], 0)
+        book = replay_tf_book(m1, "H4", csv=csv_h4)
+        self.assertIsNotNone(book)
+        mid = datetime(2026, 10, 1, 9, 30)
+        idx = next(i for i, b in enumerate(m1) if b.dt == mid)
+        forming = book["m1_bars"][idx]
+        self.assertEqual(forming.dt, slot2)
+        self.assertAlmostEqual(forming.h, 10.2)
+        self.assertAlmostEqual(forming.c, 10.0)
+        self.assertLess(forming.h, closed[1].h)
+        self.assertEqual(book["m1_slot"][idx], 1)
+        self.assertAlmostEqual(book["m1_packs"][idx]["h"], 10.2)
+        late = datetime(2026, 10, 1, 10, 30)
+        late_i = next(i for i, b in enumerate(m1) if b.dt == late)
+        self.assertAlmostEqual(book["m1_bars"][late_i].h, 20.0)
+        raw = {
+            "M1": m1,
+            "M10": [],
+            "M30": [],
+            "H4": csv_h4,
+            "D1": [],
+        }
+        books = build_books(raw)
+        h4 = books["H4"]
+        self.assertAlmostEqual(h4["m1_bars"][idx].h, 10.2)
+        self.assertEqual(len(h4["m1_vecs"][idx]), TF_DIM)
+        self.assertNotEqual(h4["m1_bars"][idx].h, csv_h4[1].h)
+        zeros = [0.0] * TF_DIM
+        closed_ok = [0.0] * (TF_DIM - 1) + [1.0]
+        forming_ok = [3.0] * (TF_DIM - 1) + [1.0]
+        chained = _chain_forming([closed_ok], forming_ok, 1)
+        self.assertEqual(chained[:TF_DIM], zeros)
+        self.assertEqual(chained[TF_DIM : 2 * TF_DIM], closed_ok)
+        self.assertEqual(chained[2 * TF_DIM :], forming_ok)
+
+    def test_pack_vec_marks_and_z(self):
+        from analyzer.net import SETUP_NAMES, pack_vec
+
+        scales = {
+            "current.rpm": 1.0,
+            "current.ema": 1.0,
+            "small.rpm": 1.0,
+            "small.ema": 1.0,
+            "middle.rpm": 1.0,
+            "middle.ema": 1.0,
+            "hist.hist": 1.0,
+        }
+        layer = {"rpm": -1.0, "ema": -0.5, "hist": -0.4, "d_rpm": 0.1, "d_ema": 0.0, "d_hist": 0.05}
+        pack = {
+            "current": layer,
+            "small": layer,
+            "middle": layer,
+            "hist": layer,
+            "hist_raw": {"hist": -0.4, "hist_up": None, "hist_dw": -0.4},
+        }
+        vec = pack_vec(pack, None, [pack], 0, scales)
+        self.assertEqual(len(vec), 34)
+        self.assertEqual(vec[0], -1.0)
+        self.assertEqual(vec[-1], 1.0)
+        none_i = 13 + 8 + SETUP_NAMES.index("none")
+        self.assertEqual(vec[none_i], 1.0)
+
+    def test_label_bar_pullback_and_entries(self):
+        from analyzer.net import ACTION_NAMES, REGIME_NAMES, label_bar
+
+        up = {"side": "up", "start": 10, "end": 20}
+        r, a = label_bar(up, 10, senior_dir=-1)
+        self.assertEqual(REGIME_NAMES[r], "pullback")
+        self.assertEqual(ACTION_NAMES[a], "buy_in")
+        r, a = label_bar(up, 20, senior_dir=1)
+        self.assertEqual(REGIME_NAMES[r], "impulse")
+        self.assertEqual(ACTION_NAMES[a], "buy_out")
+        r, a = label_bar(None, 5, senior_dir=1)
+        self.assertEqual(REGIME_NAMES[r], "flat")
+        self.assertEqual(ACTION_NAMES[a], "none")
+        down = {"side": "down", "start": 0, "end": 8}
+        r, a = label_bar(down, 0, senior_dir=1)
+        self.assertEqual(REGIME_NAMES[r], "pullback")
+        self.assertEqual(ACTION_NAMES[a], "sell_in")
+        r, a = label_bar(up, 12, senior_dir=0)
+        self.assertEqual(REGIME_NAMES[r], "flat")
+        self.assertEqual(ACTION_NAMES[a], "none")
+
+    def test_trade_hit_target_before_stop(self):
+        from analyzer.net import trade_hit
+
+        closes = [100.0 + i for i in range(50)]
+        highs = [c + 0.2 for c in closes]
+        lows = [c - 0.2 for c in closes]
+        self.assertEqual(trade_hit(1, 10, highs, lows, closes), "win")
+        self.assertNotEqual(trade_hit(-1, 10, highs, lows, closes), "win")
+        down = [150.0 - i for i in range(50)]
+        dh = [c + 0.2 for c in down]
+        dl = [c - 0.2 for c in down]
+        self.assertEqual(trade_hit(-1, 10, dh, dl, down), "win")
+        self.assertNotEqual(trade_hit(1, 10, dh, dl, down), "win")
+        trap = [100.0] * 8 + [101.0, 102.0, 90.0] + [89.0] * 20
+        th = [c + 0.2 for c in trap]
+        tl = [c - 0.2 for c in trap]
+        self.assertEqual(trade_hit(1, 8, th, tl, trap, stop_bars=8, horizon=15), "loss")
+
+    def test_label_trades_pullback_in_impulse(self):
+        from analyzer.net import label_trades, pullback_in_impulse, regime_from_dirs
+
+        self.assertEqual(pullback_in_impulse(-1, -1, 1, 1), 1)
+        self.assertEqual(pullback_in_impulse(1, 1, 1, 1), 0)
+        self.assertEqual(regime_from_dirs(1, 1), 1)
+        self.assertEqual(regime_from_dirs(1, -1), 2)
+        n = 50
+        closes = [100.0 + i for i in range(n)]
+        highs = [c + 0.2 for c in closes]
+        lows = [c - 0.2 for c in closes]
+        one = [1] * n
+        dip = [-1] * n
+        y_r, y_a = label_trades(highs, lows, closes, one, dip, dip, one)
+        self.assertEqual(set(y_r), {2})
+        self.assertIn(1, y_a)
+        self.assertIn(3, y_a)
+        self.assertNotIn(2, y_a)
+        _yr, no_dip = label_trades(highs, lows, closes, one, one, one, one)
+        self.assertEqual(set(no_dip), {0})
+        self.assertEqual(set(_yr), {1})
+        refuse = [0] * n
+        refuse[12] = 1
+        _yr, y_refuse = label_trades(highs, lows, closes, one, one, one, one, refuse=refuse)
+        self.assertIn(1, y_refuse)
+        self.assertIn(3, y_refuse)
+
+    def test_hist_refuse_and_pack_bias(self):
+        from analyzer.combo import buy_body, buy_hist, setup_signal
+        from analyzer.net import (
+            hist_refuse_side,
+            miss_hist_buy,
+            miss_hist_sell,
+            pack_bias,
+            pack_dir_from_bias,
+        )
+
+        down = {
+            "vs0": "below_0",
+            "vs_ema": "below_ema",
+            "ema_vs0": "below_0",
+            "ema_trend": "falling",
+        }
+        up = {
+            "vs0": "above_0",
+            "vs_ema": "above_ema",
+            "ema_vs0": "above_0",
+            "ema_trend": "rising",
+        }
+        cur_down = {
+            "vs0": "below_0",
+            "vs_ema": "below_ema",
+            "ema_vs0": "below_0",
+            "slope": "rising_below_ema",
+        }
+        cur_up = {
+            "vs0": "above_0",
+            "vs_ema": "above_ema",
+            "ema_vs0": "above_0",
+            "slope": "rising_above_ema",
+        }
+        hist_red = {"hist_sign": "below_0", "hist_dir": "hist_growing"}
+        hist_red_shrink = {"hist_sign": "below_0", "hist_dir": "hist_shrinking"}
+        hist_green = {"hist_sign": "above_0", "hist_dir": "hist_growing"}
+        hist_green_shrink = {"hist_sign": "above_0", "hist_dir": "hist_shrinking"}
+        self.assertTrue(buy_body(down, down, cur_down))
+        self.assertTrue(buy_hist(hist_red))
+        self.assertFalse(buy_hist(hist_red_shrink))
+        self.assertEqual(setup_signal(down, down, hist_red_shrink, cur_down), "none")
+        self.assertTrue(miss_hist_buy(down, down, hist_red_shrink, cur_down))
+        self.assertFalse(miss_hist_buy(down, down, hist_red, cur_down))
+        leftover = {
+            "current": cur_up,
+            "small": down,
+            "middle": down,
+            "hist": hist_red_shrink,
+        }
+        self.assertEqual(hist_refuse_side(1, leftover, 0), 1)
+        self.assertEqual(hist_refuse_side(1, leftover, -1), 0)
+        printed = {"current": cur_down, "small": down, "middle": down, "hist": hist_red}
+        self.assertEqual(hist_refuse_side(1, printed, 1), 0)
+        almost = {"current": cur_down, "small": down, "middle": down, "hist": hist_red_shrink}
+        self.assertEqual(hist_refuse_side(1, almost, 1), 1)
+        waiting = {
+            "current": dict(cur_down, slope="falling_below_ema"),
+            "small": down,
+            "middle": down,
+            "hist": {"hist_sign": "below_0", "hist_dir": "na"},
+        }
+        self.assertEqual(hist_refuse_side(1, waiting, 1), 0)
+        sell_left = {
+            "current": cur_down,
+            "small": up,
+            "middle": up,
+            "hist": hist_green_shrink,
+        }
+        self.assertEqual(hist_refuse_side(-1, sell_left, 0), -1)
+        self.assertTrue(miss_hist_sell(up, up, hist_green_shrink, cur_down))
+        d1_cur = {
+            "vs0": "below_0",
+            "vs_ema": "below_ema",
+            "ema_vs0": "above_0",
+            "slope": "rising_below_ema",
+        }
+        bias = pack_bias(d1_cur, down, down, hist_green)
+        self.assertGreater(bias, 0.05)
+        self.assertEqual(pack_dir_from_bias(bias, True), 1)
+        self.assertEqual(pack_dir_from_bias(bias, False), 0)
+
+    def test_layer_div_buy_and_sell_mirror(self):
+        from analyzer.net import layer_div_side
+
+        small_dn = {
+            "vs0": "above_0",
+            "vs_ema": "below_ema",
+            "slope": "falling_below_ema",
+            "ema_trend": "falling",
+        }
+        middle_up = {
+            "vs0": "above_0",
+            "vs_ema": "above_ema",
+            "slope": "flat_above_ema",
+            "ema_trend": "flat",
+            "ema_vs0": "above_0",
+        }
+        middle_flat = dict(middle_up, vs_ema="near_ema")
+        cur_approach = {
+            "vs0": "above_0",
+            "vs_ema": "below_ema",
+            "slope": "falling_below_ema",
+            "ema_vs0": "above_0",
+            "ema_slope": "flat",
+        }
+        cur_below = {
+            "vs0": "below_0",
+            "vs_ema": "below_ema",
+            "slope": "rising_below_ema",
+            "ema_vs0": "above_0",
+            "ema_slope": "flat",
+        }
+        hist_red_plus = {"hist_sign": "above_0", "hist_dir": "hist_shrinking"}
+        buy = {"current": cur_approach, "small": small_dn, "middle": middle_up, "hist": hist_red_plus}
+        self.assertEqual(layer_div_side([buy]), 0)
+        self.assertEqual(layer_div_side([buy, buy, buy]), 1)
+        self.assertEqual(layer_div_side([dict(buy, current=cur_below)] * 3), 1)
+        self.assertEqual(layer_div_side([dict(buy, middle=middle_flat)] * 3), 1)
+        small_up = {
+            "vs0": "below_0",
+            "vs_ema": "above_ema",
+            "slope": "rising_above_ema",
+            "ema_trend": "rising",
+        }
+        middle_dn = {
+            "vs0": "below_0",
+            "vs_ema": "below_ema",
+            "slope": "flat_below_ema",
+            "ema_trend": "falling",
+            "ema_vs0": "below_0",
+        }
+        middle_flat_dn = dict(middle_dn, vs_ema="near_ema", ema_trend="flat")
+        cur_from_below = {
+            "vs0": "near_0",
+            "vs_ema": "above_ema",
+            "slope": "rising_above_ema",
+            "ema_vs0": "below_0",
+        }
+        cur_above = {
+            "vs0": "above_0",
+            "vs_ema": "above_ema",
+            "slope": "falling_above_ema",
+            "ema_vs0": "below_0",
+        }
+        hist_green_minus = {"hist_sign": "below_0", "hist_dir": "hist_shrinking"}
+        sell = {
+            "current": cur_from_below,
+            "small": small_up,
+            "middle": middle_dn,
+            "hist": hist_green_minus,
+        }
+        self.assertEqual(layer_div_side([sell, sell, sell]), -1)
+        self.assertEqual(layer_div_side([dict(sell, current=cur_above)] * 3), -1)
+        self.assertEqual(layer_div_side([dict(sell, middle=middle_flat_dn)] * 3), -1)
+        growing = dict(sell, hist={"hist_sign": "below_0", "hist_dir": "hist_growing"})
+        self.assertEqual(layer_div_side([growing] * 3), 0)
+
+    def test_decide_action_threshold(self):
+        import numpy as np
+
+        from analyzer.net import (
+            action_from_ph_mean,
+            mix_ahead_probs,
+            pa_from_ahead_mix,
+            strip_action_points,
+        )
+
+        up = np.array([0.1, 0.8, 0.1], dtype=np.float32)
+        self.assertEqual(action_from_ph_mean(up), "buy_in")
+        self.assertEqual(action_from_ph_mean(np.array([0.8, 0.1, 0.1])), "none")
+        self.assertEqual(action_from_ph_mean(np.array([0.1, 0.42, 0.40])), "none")
+        self.assertEqual(action_from_ph_mean(None), "none")
+        ph_by = {
+            ("M30", "M10"): np.array([0.1, 0.8, 0.1], dtype=np.float32),
+            ("H4", "M30"): np.array([0.1, 0.7, 0.2], dtype=np.float32),
+            ("D1", "H4"): np.array([0.2, 0.6, 0.2], dtype=np.float32),
+        }
+        mixed = mix_ahead_probs(ph_by)
+        self.assertIsNotNone(mixed)
+        self.assertEqual(action_from_ph_mean(mixed), "buy_in")
+        pa = pa_from_ahead_mix(mixed)
+        self.assertEqual(float(pa[3]), 0.0)
+        self.assertEqual(float(pa[4]), 0.0)
+        self.assertIsNone(mix_ahead_probs({("M30", "M10"): up}))
+        row = {"action": "buy_in", "buy_in": 80.0}
+        self.assertEqual(strip_action_points(row)["action"], "none")
+        self.assertEqual(row["action"], "buy_in")
+
+    def test_pred_row_ahead_is_three_head_mean(self):
+        import numpy as np
+
+        from analyzer.net import _pred_row
+
+        dt = datetime(2026, 10, 2, 10, 0)
+        pr = np.array([0.1, 0.7, 0.2], dtype=np.float32)
+        pa = np.array([0.15, 0.60, 0.25, 0.0, 0.0], dtype=np.float32)
+        row = _pred_row(dt, pr, pa)
+        self.assertAlmostEqual(row["ahead_flat"], 15.0, places=1)
+        self.assertAlmostEqual(row["ahead_up"], 60.0, places=1)
+        self.assertAlmostEqual(row["ahead_down"], 25.0, places=1)
+        self.assertAlmostEqual(row["buy_in"], 60.0, places=1)
+        self.assertAlmostEqual(row["sell_in"], 25.0, places=1)
+        self.assertEqual(row["ahead"], "ahead_up")
+        self.assertEqual(row["buy_out"], 0.0)
+        self.assertEqual(row["sell_out"], 0.0)
+
+    def test_window_indices_stride(self):
+        from analyzer.net import STRIDE, _sample_indices, window_indices
+
+        self.assertEqual(STRIDE, 1)
+        self.assertEqual(_sample_indices(10, 16), [10, 11, 12, 13, 14, 15])
+        self.assertEqual(window_indices(5), [0, 1, 2, 3, 4, 5])
+        self.assertEqual(window_indices(10, window=3, step=5), [0, 5, 10])
+
+    def test_ahead_label_ten_bars(self):
+        from analyzer.net import AHEAD_BARS, ahead_label
+
+        self.assertEqual(AHEAD_BARS, 10)
+        n = 12
+        closes = [10.0] * n
+        highs = [10.0] * n
+        lows = [10.0] * n
+        highs[5] = 11.0
+        self.assertEqual(ahead_label(0, highs, lows, closes, 0.5), 1)
+        highs = [10.0] * n
+        lows = [10.0] * n
+        lows[8] = 9.0
+        self.assertEqual(ahead_label(0, highs, lows, closes, 0.5), 2)
+        self.assertEqual(ahead_label(0, [10.01] * n, [9.99] * n, closes, 1.0), 0)
+        self.assertEqual(ahead_label(11, highs, lows, closes, 0.5), 0)
+        long_h = [10.0] * 32
+        long_l = [10.0] * 32
+        long_c = [10.0] * 32
+        long_h[25] = 11.0
+        self.assertEqual(ahead_label(0, long_h, long_l, long_c, 0.5, bars=30), 1)
+
+    def test_horizon_flat_threshold_uses_window_excursion(self):
+        from analyzer.odds import FLAT_FRAC, flat_threshold
+        from analyzer.net import ahead_flat_by_pair, ahead_label, horizon_flat_threshold
+
+        n = 400
+        closes = [100.0] * n
+        highs = [100.5] * n
+        lows = [99.8] * n
+        t10 = horizon_flat_threshold(highs, lows, closes, 10)
+        t240 = horizon_flat_threshold(highs, lows, closes, 240)
+        self.assertAlmostEqual(t10, 0.5 * FLAT_FRAC, places=4)
+        self.assertAlmostEqual(t240, 0.5 * FLAT_FRAC, places=4)
+        one = flat_threshold(closes)
+        self.assertGreater(one, t10)
+
+        saw_h = [100.0 + (i % 80) * 0.05 for i in range(n)]
+        saw_l = [100.0] * n
+        wide = horizon_flat_threshold(saw_h, saw_l, closes, 240)
+        short = horizon_flat_threshold(saw_h, saw_l, closes, 10)
+        self.assertGreater(wide, short)
+
+        mild_h = [100.3] * 50
+        mild_l = [100.0] * 50
+        mild_c = [100.0] * 50
+        self.assertEqual(ahead_label(0, mild_h, mild_l, mild_c, 0.5, bars=30), 0)
+        self.assertEqual(ahead_label(0, mild_h, mild_l, mild_c, 0.1, bars=30), 1)
+        by_pair = ahead_flat_by_pair(saw_h, saw_l, closes)
+        self.assertGreater(by_pair[("D1", "H4")], by_pair[("M30", "M10")])
+
+    def test_action_from_three_aheads_and_right_edge(self):
+        from analyzer.net import (
+            action_from_aheads,
+            action_probs_from_aheads,
+            max_ahead_m1,
+            pair_ahead_labels,
+            train_label_stop,
+        )
+
+        self.assertEqual(max_ahead_m1(), 240)
+        self.assertEqual(train_label_stop(1000, overlay=False), 760)
+        self.assertEqual(train_label_stop(1000, overlay=True), 1000)
+        up = {("M30", "M10"): 1, ("H4", "M30"): 1, ("D1", "H4"): 1}
+        self.assertEqual(action_from_aheads(up), 1)
+        self.assertEqual(action_probs_from_aheads(up), (0.0, 1.0, 0.0))
+        down2 = {("M30", "M10"): 2, ("H4", "M30"): 2, ("D1", "H4"): 0}
+        self.assertEqual(action_from_aheads(down2), 2)
+        p = action_probs_from_aheads(down2)
+        self.assertAlmostEqual(p[0], 1.0 / 3.0)
+        self.assertAlmostEqual(p[2], 2.0 / 3.0)
+        mixed = {("M30", "M10"): 1, ("H4", "M30"): 2, ("D1", "H4"): 0}
+        self.assertEqual(action_from_aheads(mixed), 0)
+        n = 300
+        closes = [100.0] * n
+        highs = [100.5] * n
+        lows = [99.5] * n
+        flats = {("M30", "M10"): 0.1, ("H4", "M30"): 0.1, ("D1", "H4"): 0.1}
+        self.assertIsNone(pair_ahead_labels(n - 240, highs, lows, closes, flats, 0.3))
+        self.assertIsNotNone(pair_ahead_labels(n - 241, highs, lows, closes, flats, 0.3))
+
+    def test_softmax_and_mlp_roundtrip(self):
+        import tempfile
+
+        import numpy as np
+
+        from analyzer.net import MLP, fit_mlp, load_net, predict_vec, save_net, softmax
+
+        s = softmax(np.array([[1.0, 1.0, 1.0]], dtype=np.float32))
+        self.assertAlmostEqual(float(s.sum()), 1.0, places=5)
+        rng = np.random.default_rng(0)
+        X = rng.normal(size=(240, 12)).astype(np.float32)
+        y_r = np.zeros(240, dtype=np.int64)
+        y_a = np.zeros(240, dtype=np.int64)
+        y_h = np.zeros(240, dtype=np.int64)
+        X[:80, 0] += 4
+        y_r[:80] = 0
+        X[80:160, 1] += 4
+        y_r[80:160] = 1
+        y_a[80:160] = 1
+        y_h[80:160] = 1
+        X[160:, 2] += 4
+        y_r[160:] = 2
+        y_a[160:] = 2
+        y_h[160:] = 2
+        cut = 192
+        model, last, mean, std = fit_mlp(
+            X[:cut],
+            y_r[:cut],
+            y_a[:cut],
+            y_h[:cut],
+            X[cut:],
+            y_r[cut:],
+            y_a[cut:],
+            y_h[cut:],
+            epochs=14,
+            batch=32,
+            rng=1,
+        )
+        self.assertGreater(last["acc_regime"], 0.70)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "net.npz"
+            save_net(path, model, mean, std, {"n": 240})
+            loaded, m2, s2 = load_net(path)
+            pred = predict_vec(loaded, m2, s2, X[-1])
+            self.assertIn(pred["regime"], ("flat", "impulse", "pullback"))
+            self.assertIn(pred["action"], ("none", "buy_in", "sell_in"))
+            self.assertIn(pred["ahead"], ("ahead_flat", "ahead_up", "ahead_down"))
+            self.assertIn("Wh0", np.load(path).files)
+            pr, pa, phs = loaded.predict_proba(((X[-1] - m2) / s2).astype(np.float32)[None, :])
+            self.assertEqual(phs.shape, (1, 3, 3))
+
+    def test_ph_for_tf_not_mixed(self):
+        import numpy as np
+
+        from analyzer.net import _ph_for_tf
+
+        m10 = np.array([0.1, 0.8, 0.1], dtype=np.float32)
+        m30 = np.array([0.1, 0.1, 0.8], dtype=np.float32)
+        h4 = np.array([0.9, 0.05, 0.05], dtype=np.float32)
+        ph_by = {("M30", "M10"): m10, ("H4", "M30"): m30, ("D1", "H4"): h4}
+        self.assertIs(_ph_for_tf(ph_by, "M10"), m10)
+        self.assertIs(_ph_for_tf(ph_by, "M1"), m10)
+        self.assertIs(_ph_for_tf(ph_by, "M30"), m30)
+        self.assertIs(_ph_for_tf(ph_by, "H4"), h4)
+        self.assertIs(_ph_for_tf(ph_by, "D1"), h4)
+
+    def test_align_net_rows_and_csv(self):
+        import tempfile
+
+        from analyzer.net import align_net_rows, write_net_csv
+
+        t0 = datetime(2026, 10, 2, 10, 0)
+        t1 = datetime(2026, 10, 2, 10, 5)
+        rows = [
+            {
+                "dt": t0,
+                "impulse": 40.0,
+                "pullback": 10.0,
+                "flat": 50.0,
+                "buy_in": 5.0,
+                "sell_in": 2.0,
+                "buy_out": 1.0,
+                "sell_out": 0.0,
+                "action": "none",
+                "regime": "flat",
+            },
+            {
+                "dt": t1,
+                "impulse": 70.0,
+                "pullback": 5.0,
+                "flat": 25.0,
+                "buy_in": 60.0,
+                "sell_in": 3.0,
+                "buy_out": 2.0,
+                "sell_out": 1.0,
+                "action": "buy_in",
+                "regime": "impulse",
+            },
+        ]
+        aligned = align_net_rows(rows, [datetime(2026, 10, 2, 10, 3), datetime(2026, 10, 2, 10, 6)])
+        self.assertEqual(aligned[0]["dt"], datetime(2026, 10, 2, 10, 3))
+        self.assertEqual(aligned[0]["action"], "none")
+        self.assertEqual(aligned[1]["action"], "buy_in")
+        mixed = [
+            dict(rows[0], impulse=100.0, pullback=0.0, flat=0.0),
+            dict(rows[1], dt=datetime(2026, 10, 2, 10, 4), impulse=0.0, pullback=100.0, flat=0.0, action="none"),
+        ]
+        bucket = align_net_rows(mixed, [datetime(2026, 10, 2, 10, 6)])
+        self.assertAlmostEqual(bucket[0]["impulse"], 50.0, places=0)
+        self.assertAlmostEqual(bucket[0]["pullback"], 50.0, places=0)
+        from analyzer.net import smooth_regime_rows
+
+        sm = smooth_regime_rows(
+            [
+                dict(rows[0], impulse=100.0, pullback=0.0, flat=0.0),
+                dict(rows[1], impulse=0.0, pullback=100.0, flat=0.0),
+            ],
+            span=3,
+        )
+        self.assertGreater(sm[1]["impulse"], 5.0)
+        self.assertLess(sm[1]["impulse"], 95.0)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "CR_SPBFUT_M1.csv"
+            write_net_csv(path, rows)
+            text = path.read_text(encoding="utf-8")
+        self.assertIn("datetime;impulse;pullback;flat;buy_in;sell_in;buy_out;sell_out;action;ahead_flat;ahead_up;ahead_down", text)
+        self.assertIn("buy_in", text)
+
+    def test_freeze_closed_bars_keep_old_values(self):
+        from analyzer.net import freeze_closed_rows
+
+        t0 = datetime(2026, 10, 2, 10, 0)
+        t1 = datetime(2026, 10, 2, 10, 30)
+        old = [
+            {
+                "dt": t0,
+                "impulse": 40.0,
+                "pullback": 10.0,
+                "flat": 50.0,
+                "buy_in": 0.0,
+                "sell_in": 0.0,
+                "buy_out": 0.0,
+                "sell_out": 0.0,
+                "action": "none",
+                "regime": "flat",
+            }
+        ]
+        new = [
+            dict(old[0], impulse=10.0, pullback=80.0, flat=10.0, regime="pullback"),
+            {
+                "dt": t1,
+                "impulse": 70.0,
+                "pullback": 5.0,
+                "flat": 25.0,
+                "buy_in": 60.0,
+                "sell_in": 3.0,
+                "buy_out": 2.0,
+                "sell_out": 1.0,
+                "action": "buy_in",
+                "regime": "impulse",
+            },
+        ]
+        clock = datetime(2026, 10, 2, 10, 40)
+        out = freeze_closed_rows(old, new, "M30", clock)
+        self.assertEqual(out[0]["impulse"], 40.0)
+        self.assertEqual(out[0]["regime"], "flat")
+        self.assertEqual(out[1]["impulse"], 70.0)
+        old_forming = [old[0], dict(new[1], impulse=1.0, action="none", regime="flat")]
+        live = freeze_closed_rows(old_forming, new, "M30", clock)
+        self.assertEqual(live[0]["impulse"], 40.0)
+        self.assertEqual(live[1]["impulse"], 70.0)
+        self.assertEqual(live[1]["action"], "buy_in")
+
+
 if __name__ == "__main__":
     unittest.main()

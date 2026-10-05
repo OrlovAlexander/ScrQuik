@@ -38,34 +38,56 @@ def _tags_match(pack: dict | None, **expect) -> bool:
     return True
 
 
-def _buy_stack(small: dict, middle: dict, hist: dict, current: dict | None = None) -> bool:
-    down = dict(
-        vs0="below_0",
-        vs_ema="below_ema",
-        ema_vs0="below_0",
-        ema_trend="falling",
-    )
+_BUY_LAYER = dict(
+    vs0="below_0",
+    vs_ema="below_ema",
+    ema_vs0="below_0",
+    ema_trend="falling",
+)
+_BUY_CURRENT = dict(vs0="below_0", vs_ema="below_ema", ema_vs0="below_0")
+_SELL_LAYER = dict(
+    vs0="above_0",
+    vs_ema="above_ema",
+    ema_vs0="above_0",
+    ema_trend="rising",
+)
+_SELL_CURRENT = dict(vs0="above_0", vs_ema="above_ema", ema_vs0="above_0")
+
+
+def buy_body(small: dict, middle: dict, current: dict | None = None) -> bool:
+    """Buy stack without hist. Does not change setup_signal."""
     return (
-        _tags_match(small, **down)
-        and _tags_match(middle, **down)
-        and _tags_match(hist, hist_sign="below_0", hist_dir="hist_growing")
-        and _tags_match(current, vs0="below_0", vs_ema="below_ema", ema_vs0="below_0")
+        _tags_match(small, **_BUY_LAYER)
+        and _tags_match(middle, **_BUY_LAYER)
+        and _tags_match(current, **_BUY_CURRENT)
     )
+
+
+def buy_hist(hist: dict) -> bool:
+    """Red histDw growing away from zero. Combo buy still requires this."""
+    return _tags_match(hist, hist_sign="below_0", hist_dir="hist_growing")
+
+
+def sell_body(small: dict, middle: dict, current: dict | None = None) -> bool:
+    """Sell stack without hist. Does not change setup_signal."""
+    return (
+        _tags_match(small, **_SELL_LAYER)
+        and _tags_match(middle, **_SELL_LAYER)
+        and _tags_match(current, **_SELL_CURRENT)
+    )
+
+
+def sell_hist(hist: dict) -> bool:
+    """Green histUp growing away from zero. Combo sell still requires this."""
+    return _tags_match(hist, hist_sign="above_0", hist_dir="hist_growing")
+
+
+def _buy_stack(small: dict, middle: dict, hist: dict, current: dict | None = None) -> bool:
+    return buy_body(small, middle, current) and buy_hist(hist)
 
 
 def _sell_stack(small: dict, middle: dict, hist: dict, current: dict | None = None) -> bool:
-    up = dict(
-        vs0="above_0",
-        vs_ema="above_ema",
-        ema_vs0="above_0",
-        ema_trend="rising",
-    )
-    return (
-        _tags_match(small, **up)
-        and _tags_match(middle, **up)
-        and _tags_match(hist, hist_sign="above_0", hist_dir="hist_growing")
-        and _tags_match(current, vs0="above_0", vs_ema="above_ema", ema_vs0="above_0")
-    )
+    return sell_body(small, middle, current) and sell_hist(hist)
 
 
 def _buy_m10_cross(current: dict | None, small: dict, middle: dict, hist: dict) -> bool:

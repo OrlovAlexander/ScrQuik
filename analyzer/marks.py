@@ -231,6 +231,7 @@ def watch_marks(
     log: Callable[[str], None] | None = None,
     formatter: Callable[..., str] | None = None,
     label: str = "marks",
+    export_tfs: Callable[[tuple[str, ...]], tuple[str, ...]] | None = None,
 ) -> int:
     """Re-export marks whenever barsSaver CSV files grow. Returns export count."""
     wait = max(1.0, float(poll))
@@ -269,30 +270,51 @@ def watch_marks(
                         dirty_by_tf[tf] = dirty_by_tf.get(tf, 0) + 1
             tf_bits = " ".join(f"{tf}={dirty_by_tf.get(tf, 0)}" for tf in chosen)
             emit(f"{stamp}  poll#{cycle}  n={len(universe)}  dirty={len(dirty)}  {tf_bits}")
+            jobs: list[tuple[str, str, tuple[str, ...], list[tuple[str, tuple]]]] = []
+            if export_tfs is None:
+                for name, cls, tf, fp in dirty:
+                    jobs.append((name, cls, (tf,), [(tf, fp)]))
+            else:
+                grouped: dict[tuple[str, str], list[tuple[str, tuple]]] = {}
+                order: list[tuple[str, str]] = []
+                for name, cls, tf, fp in dirty:
+                    key = (name, cls)
+                    if key not in grouped:
+                        grouped[key] = []
+                        order.append(key)
+                    grouped[key].append((tf, fp))
+                for name, cls in order:
+                    items = grouped[(name, cls)]
+                    seen = tuple(tf for tf, _ in items)
+                    jobs.append((name, cls, export_tfs(seen), items))
             done = 0
-            for name, cls, tf, fp in dirty:
+            for name, cls, tfs_arg, items in jobs:
                 if done and (time.monotonic() - t0) >= budget:
-                    left = len(dirty) - done
+                    left = len(jobs) - done
                     emit(f"{stamp}  defer {left}  next poll")
                     break
                 try:
+                    if export_tfs is not None:
+                        emit(f"{stamp}  compute {name}  {'+'.join(tfs_arg)} ...")
                     report = run(
                         name,
                         cls,
                         dest_dir=dest,
                         data_dir=bars_root,
-                        tfs=(tf,),
+                        tfs=tfs_arg,
                     )
                     report["exported_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     emit(fmt(report, compact=True))
-                    last[(name, cls, tf)] = fp
+                    for tf, fp in items:
+                        last[(name, cls, tf)] = fp
                     exports += 1
                     done += 1
                 except FileNotFoundError as exc:
-                    last[(name, cls, tf)] = fp
-                    emit(f"watch wait {name} {tf}: {exc}")
+                    for tf, fp in items:
+                        last[(name, cls, tf)] = fp
+                    emit(f"watch wait {name} {items[0][0]}: {exc}")
                 except Exception as exc:
-                    emit(f"watch error {name} {tf}: {exc}")
+                    emit(f"watch error {name} {items[0][0]}: {exc}")
         except KeyboardInterrupt:
             emit("watch stopped")
             break

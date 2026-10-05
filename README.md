@@ -1,6 +1,6 @@
 # ScrQuik
 
-Индикаторы QUIK (QLua) и офлайн-анализатор тех же линий по CSV `barsSaver`.
+Индикаторы QUIK (QLua) и офлайн-анализатор тех же линий. Рабочий ряд — **M1** barsSaver; старшие ТФ собирают из M1, CSV M10/M30/H4/D1 — сверка на закрытии. Сигналы на истории считают динамически с дискретностью M1; на открытом слоте они моргают ([docs/tf-from-m1.md](docs/tf-from-m1.md)).
 Python повторяет раскладку живых графиков: на каждом ТФ один RPM-current и один RPM-up; паттерн 121 только на M30.
 
 ## Состав репозитория
@@ -36,6 +36,8 @@ docs/                документация
 | `lua/one2oneLib.lua` | библиотека 121 |
 | `lua/AnalyzerMarks.lua` | точки сетапов на цене |
 | `lua/AnalyzerZigZag.lua` | ноги зигзага `--waves` на цене |
+| `lua/AnalyzerOdds.lua` | архив `--odds`; эволюционировал в `*AnalyzerNet` |
+| `lua/AnalyzerNet.lua` | `*AnalyzerNet`: флет режима, три пунктира среднего ahead, точки M10/M30 на 33; без impulse/pullback/uncertain/100 |
 
 После замены lua снять индикатор с графика и навесить снова.
 
@@ -48,7 +50,7 @@ docs/                документация
 - один `*RPM_TF_Current`
 - один `*RPM_TF_Up_5`
 
-`*One2One_121` — **только M30**. `*AnalyzerMarks` — M1, M10, M30, H4 и D1, на ценовой панели. `*AnalyzerZigZag` — M1, M10 и M30, на ценовой панели.
+`*One2One_121` — **только M30**. `*AnalyzerMarks` — M1, M10, M30, H4 и D1, на ценовой панели. `*AnalyzerZigZag` — M1, M10 и M30, на ценовой панели. `*AnalyzerOdds` — архив (ведущий→M1), продолжение — `*AnalyzerNet`. `*AnalyzerNet` — M1, M10, M30, H4 и D1, **отдельное окно** (не на цену); точки `buy_in`/`sell_in` на уровне 33 только на M10 и M30.
 
 Слои RPM-up (Small / Middle / Up):
 
@@ -64,13 +66,19 @@ D2–D5 и W2–W5 в анализаторе режутся так же, как 
 
 ## Анализатор
 
-Считает те же RPM и сетапы `buy` / `sell` / `buy1` / `sell1` / `buy2` / `sell2` по CSV свечей и пишет метки для `*AnalyzerMarks`. Отдельно `--waves` строит зигзаг и волны 1–5 (предположение по Кречетову, не копия его стратегии), без изменения правил сетапов.
+Считает те же RPM и сетапы `buy` / `sell` / `buy1` / `sell1` / `buy2` / `sell2` по ряду из M1 и пишет метки для `*AnalyzerMarks`. Отдельно `--waves` строит зигзаг и волны 1–5 (предположение по Кречетову, не копия его стратегии), без изменения правил сетапов. `--odds` эволюционировал в `--net` (оверлей odds не развивать). `--pack-ahead` ищет похожую пачку формирующегося D1 на D1/H4/M30 и смотрит закрытие следующего D1 справа (без цепочки). `--train-net` / `--net` — нейронка по парным связкам, общие веса на одну связку: три головы ahead (10 / 30 / 240 M1), головы действия нет; точка на M10/M30 — среднее трёх вероятностей и порог. Как считают круг: [docs/analyzer-net.md](docs/analyzer-net.md#точка-обучение-и-живой-график). Сетапы меток не меняет.
 
 ```text
 python -m analyzer --sec GAZP
 python -m analyzer --sec GAZP --combo
 python -m analyzer --sec CNY12.26 --waves
 python -m analyzer --watch-waves --sec CNY12.26
+python -m analyzer --sec CNY12.26 --odds
+python -m analyzer --watch-odds --sec CNY12.26
+python -m analyzer --sec CNY12.26 --pack-ahead
+python -m analyzer --train-net
+python -m analyzer --sec CNY12.26 --net
+python -m analyzer --watch-net --sec CNY12.26
 python -m analyzer --marks
 python -m analyzer --watch
 ```
@@ -78,8 +86,10 @@ python -m analyzer --watch
 `--watch` не закрывать: простой **11 с**, пачка грязных тикеров до **21 с**, сначала M1, потом M10, M30, H4, D1.
 
 Зигзаг на графике: [docs/analyzer-waves.md](docs/analyzer-waves.md) (`--watch-waves`, `*AnalyzerZigZag`).
+`--odds` эволюционировал в сеть: [docs/analyzer-odds.md](docs/analyzer-odds.md) → [docs/analyzer-net.md](docs/analyzer-net.md).
+Нейронка по парным связкам (общие веса): [docs/analyzer-net.md](docs/analyzer-net.md) (`--train-net`, `--watch-net`, `*AnalyzerNet`; [как ставят точку](docs/analyzer-net.md#точка-обучение-и-живой-график)).
 Подробности меток и сетапов: [docs/analyzer-marks.md](docs/analyzer-marks.md).
-Теги, пачки, связки, цепочки, цепочка связок и похожесть по числам живого графика: [docs/tag-packs.md](docs/tag-packs.md).
+Теги, пачки, парные связки (D1–H4, H4–M30, M30–M10), цепочки и похожесть по числам живого графика: [docs/tag-packs.md](docs/tag-packs.md).
 Архитектура Python: [docs/python-analyzer.md](docs/python-analyzer.md).
 barsSaver: [docs/barsSaver.md](docs/barsSaver.md).
 

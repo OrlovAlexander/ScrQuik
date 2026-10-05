@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "QUIK Lua indicators and a Python analyzer for RPM / 121 setups"
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = ["numpy>=2.0"]
 
 [tool.setuptools.packages.find]
 include = ["analyzer*"]
