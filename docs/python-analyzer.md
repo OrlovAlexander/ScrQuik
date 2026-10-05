@@ -41,28 +41,7 @@ D2–D5 и W2–W5 режутся **как в Lua**: unix-день `floor(os.tim
 
 ## CLI
 
-Из корня репозитория:
-
-```text
-python -m analyzer --sec GAZP
-python -m analyzer --sec GAZP --json
-python -m analyzer --sec GAZP --combo
-python -m analyzer --sec GAZP --m30
-python -m analyzer --sec CNY12.26 --waves
-python -m analyzer --watch-waves --sec CNY12.26
-python -m analyzer --sec GAZP --marks
-python -m analyzer --marks
-python -m analyzer --watch
-python -m analyzer --watch --sec CNY12.26
-python -m analyzer --sec CNY12.26 --odds
-python -m analyzer --watch-odds --sec CNY12.26
-python -m analyzer --sec CNY12.26 --pack-ahead
-python -m analyzer --train-net
-python -m analyzer --sec CNY12.26 --net
-python -m analyzer --watch-net --sec CNY12.26
-```
-
-Без `--sec` для `--marks` / `--watch` обрабатываются все инструменты из папки data. Класс по умолчанию TQBR; имя на `CNY*` -> SPBFUT. `--watch` без `--class-code` берёт и TQBR, и SPBFUT.
+Все команды с описанием — [cli.md](cli.md). Запуск из корня репозитория.
 
 `--combo` — уникальные деревья состояний H4→M1 и ходы M1 >= 1% (это не [парная связка](tag-packs.md)). `--m30` — ходы M30 >= 3% с состоянием M1/M10 на концах.
 

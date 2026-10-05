@@ -2,9 +2,10 @@
 
 | документ | о чём |
 |---|---|
+| [cli.md](cli.md) | все команды `python -m analyzer` и служебные скрипты, с описанием каждой |
 | [tf-from-m1.md](tf-from-m1.md) | старшие ТФ из M1; история сигналов динамически такт M1; CSV старших — сверка на закрытии; формирующийся слот моргает |
 | [tag-packs.md](tag-packs.md) | тег, пачка, парные связки D1–H4 / H4–M30 / M30–M10, цепочка, цепочка связок; поиск пачки D1 |
-| [python-analyzer.md](python-analyzer.md) | Python-анализатор: модули, CLI, тесты |
+| [python-analyzer.md](python-analyzer.md) | Python-анализатор: модули, сетапы, тесты |
 | [analyzer-marks.md](analyzer-marks.md) | метки на графике M1/M10/M30/H4/D1: barsSaver, `--watch`, `*AnalyzerMarks`, теги сетапов |
 | [analyzer-waves.md](analyzer-waves.md) | зигзаг на графике (`--watch-waves`, `*AnalyzerZigZag`); разметка 1–5 — предположение по Кречетову, не копия стратегии |
 | [analyzer-odds.md](analyzer-odds.md) | `--odds` эволюционировал в сеть (`--net`); оверлей ведущий→M1 не развивать |

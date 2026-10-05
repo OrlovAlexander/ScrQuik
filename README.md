@@ -68,20 +68,7 @@ D2–D5 и W2–W5 в анализаторе режутся так же, как 
 
 Считает те же RPM и сетапы `buy` / `sell` / `buy1` / `sell1` / `buy2` / `sell2` по ряду из M1 и пишет метки для `*AnalyzerMarks`. Отдельно `--waves` строит зигзаг и волны 1–5 (предположение по Кречетову, не копия его стратегии), без изменения правил сетапов. `--odds` эволюционировал в `--net` (оверлей odds не развивать). `--pack-ahead` ищет похожую пачку формирующегося D1 на D1/H4/M30 и смотрит закрытие следующего D1 справа (без цепочки). `--train-net` / `--net` — нейронка по парным связкам, общие веса на одну связку: три головы ahead (10 / 30 / 240 M1), головы действия нет; точка на M10/M30 — среднее трёх вероятностей и порог. Как считают круг: [docs/analyzer-net.md](docs/analyzer-net.md#точка-обучение-и-живой-график). Сетапы меток не меняет.
 
-```text
-python -m analyzer --sec GAZP
-python -m analyzer --sec GAZP --combo
-python -m analyzer --sec CNY12.26 --waves
-python -m analyzer --watch-waves --sec CNY12.26
-python -m analyzer --sec CNY12.26 --odds
-python -m analyzer --watch-odds --sec CNY12.26
-python -m analyzer --sec CNY12.26 --pack-ahead
-python -m analyzer --train-net
-python -m analyzer --sec CNY12.26 --net
-python -m analyzer --watch-net --sec CNY12.26
-python -m analyzer --marks
-python -m analyzer --watch
-```
+Все команды с описанием: [docs/cli.md](docs/cli.md).
 
 `--watch` не закрывать: простой **11 с**, пачка грязных тикеров до **21 с**, сначала M1, потом M10, M30, H4, D1.
 
@@ -91,6 +78,7 @@ python -m analyzer --watch
 Подробности меток и сетапов: [docs/analyzer-marks.md](docs/analyzer-marks.md).
 Теги, пачки, парные связки (D1–H4, H4–M30, M30–M10), цепочки и похожесть по числам живого графика: [docs/tag-packs.md](docs/tag-packs.md).
 Архитектура Python: [docs/python-analyzer.md](docs/python-analyzer.md).
+Команды: [docs/cli.md](docs/cli.md).
 barsSaver: [docs/barsSaver.md](docs/barsSaver.md).
 
 ## Тесты
@@ -104,6 +92,7 @@ python -m unittest discover -s tests -t . -v
 ## Документация
 
 - [docs/README.md](docs/README.md) — оглавление
+- [docs/cli.md](docs/cli.md) — все команды анализатора
 - [docs/barsSaver.md](docs/barsSaver.md) — установка barsSaver и отличия от апстрима
 - [docs/rpm-tf-up-5/](docs/rpm-tf-up-5/) — дивергенции RPM-up v5
 - [lua/README.md](lua/README.md) — что копировать в QUIK

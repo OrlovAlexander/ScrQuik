@@ -123,7 +123,7 @@
 
 ## Запуск
 
-Нужен `numpy`. Сначала веса (`--train-net`), потом CSV для графика.
+Нужен `numpy`. Сначала веса (`--train-net`), потом CSV для графика. Все команды анализатора: [cli.md](cli.md).
 
 ```text
 python -m analyzer --train-net
