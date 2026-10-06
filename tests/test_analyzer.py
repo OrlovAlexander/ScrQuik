@@ -135,8 +135,12 @@ class IniLayoutTests(unittest.TestCase):
     def test_up_sections_match_chart_tf(self):
         expect = {
             "M1": ("Mn5", "Mn10", "Mn20"),
+            "M5": ("Mn10", "Mn20", "Mn30"),
             "M10": ("Mn20", "Mn30", "H2"),
+            "M20": ("Mn30", "H1", "H2"),
+            "M25": ("H1", "H2", "H4"),
             "M30": ("H1", "H2", "H4"),
+            "H1": ("H2", "H4", "D1"),
             "H4": ("H12", "D1", "W1"),
             "D1": ("D5", "W2", "W5"),
         }
@@ -146,8 +150,12 @@ class IniLayoutTests(unittest.TestCase):
             self.assertEqual(st.middle.tf, layers[1])
             self.assertEqual(st.up.tf, layers[2])
         self.assertEqual(hist_layer_names(load_up_settings("M1")), ("up",))
+        self.assertEqual(hist_layer_names(load_up_settings("M5")), ("up",))
         self.assertEqual(hist_layer_names(load_up_settings("M10")), ("small",))
+        self.assertEqual(hist_layer_names(load_up_settings("M20")), ("small",))
+        self.assertEqual(hist_layer_names(load_up_settings("M25")), ("up",))
         self.assertEqual(hist_layer_names(load_up_settings("M30")), ("up",))
+        self.assertEqual(hist_layer_names(load_up_settings("H1")), ("up",))
         self.assertEqual(hist_layer_names(load_up_settings("H4")), ("up",))
         self.assertEqual(hist_layer_names(load_up_settings("D1")), ("up",))
 
@@ -592,6 +600,201 @@ class ComboTests(unittest.TestCase):
             "none",
         )
 
+    def test_buy3_and_sell3_continuation(self):
+        from analyzer.combo import setup_signal
+
+        buy = {
+            "current": {
+                "vs0": "above_0",
+                "vs_ema": "below_ema",
+                "slope": "rising_below_ema",
+                "ema_vs0": "above_0",
+                "ema_trend": "falling",
+            },
+            "small": {"vs0": "above_0", "vs_ema": "below_ema"},
+            "middle": {"vs0": "above_0", "vs_ema": "above_ema"},
+            "hist": {"hist_sign": "above_0", "hist_dir": "hist_shrinking"},
+        }
+        sell = {
+            "current": {
+                "vs0": "below_0",
+                "vs_ema": "above_ema",
+                "slope": "falling_above_ema",
+                "ema_vs0": "below_0",
+                "ema_trend": "rising",
+            },
+            "small": {"vs0": "below_0", "vs_ema": "above_ema"},
+            "middle": {"vs0": "below_0", "vs_ema": "below_ema"},
+            "hist": {"hist_sign": "below_0", "hist_dir": "hist_shrinking"},
+        }
+        self.assertEqual(setup_signal(buy["small"], buy["middle"], buy["hist"], buy["current"]), "buy3")
+        self.assertEqual(setup_signal(sell["small"], sell["middle"], sell["hist"], sell["current"]), "sell3")
+        self.assertEqual(setup_signal(buy["small"], buy["middle"], buy["hist"]), "none")
+        self.assertEqual(
+            setup_signal(
+                buy["small"],
+                buy["middle"],
+                buy["hist"],
+                dict(buy["current"], vs0="below_0"),
+            ),
+            "none",
+        )
+        self.assertEqual(
+            setup_signal(
+                buy["small"],
+                buy["middle"],
+                buy["hist"],
+                dict(buy["current"], slope="falling_below_ema"),
+            ),
+            "none",
+        )
+        self.assertEqual(
+            setup_signal(
+                buy["small"],
+                buy["middle"],
+                dict(buy["hist"], hist_dir="hist_growing"),
+                buy["current"],
+            ),
+            "none",
+        )
+        self.assertEqual(
+            setup_signal(
+                buy["small"],
+                buy["middle"],
+                buy["hist"],
+                dict(buy["current"], vs_ema="near_ema"),
+            ),
+            "buy3",
+        )
+        through = {
+            "current": {
+                "vs0": "above_0",
+                "vs_ema": "above_ema",
+                "slope": "rising_above_ema",
+                "ema_vs0": "above_0",
+            },
+            "small": {"vs0": "above_0", "vs_ema": "below_ema"},
+            "middle": {"vs0": "above_0", "vs_ema": "above_ema"},
+            "hist": {"hist_sign": "above_0", "hist_dir": "hist_shrinking"},
+        }
+        sell_through = {
+            "current": {
+                "vs0": "below_0",
+                "vs_ema": "below_ema",
+                "slope": "falling_below_ema",
+                "ema_vs0": "below_0",
+            },
+            "small": {"vs0": "below_0", "vs_ema": "above_ema"},
+            "middle": {"vs0": "below_0", "vs_ema": "below_ema"},
+            "hist": {"hist_sign": "below_0", "hist_dir": "hist_shrinking"},
+        }
+        self.assertEqual(
+            setup_signal(through["small"], through["middle"], through["hist"], through["current"]),
+            "none",
+        )
+        self.assertEqual(
+            setup_signal(
+                sell_through["small"],
+                sell_through["middle"],
+                sell_through["hist"],
+                sell_through["current"],
+            ),
+            "none",
+        )
+        impulse = {
+            "current": {
+                "vs0": "above_0",
+                "vs_ema": "above_ema",
+                "slope": "rising_above_ema",
+                "ema_vs0": "above_0",
+            },
+            "small": {"vs0": "above_0", "vs_ema": "below_ema"},
+            "middle": {"vs0": "above_0", "vs_ema": "above_ema"},
+            "hist": {"hist_sign": "above_0", "hist_dir": "hist_growing"},
+        }
+        sell_imp = {
+            "current": {
+                "vs0": "below_0",
+                "vs_ema": "below_ema",
+                "slope": "falling_below_ema",
+                "ema_vs0": "below_0",
+            },
+            "small": {"vs0": "below_0", "vs_ema": "above_ema"},
+            "middle": {"vs0": "below_0", "vs_ema": "below_ema"},
+            "hist": {"hist_sign": "below_0", "hist_dir": "hist_growing"},
+        }
+        self.assertEqual(
+            setup_signal(impulse["small"], impulse["middle"], impulse["hist"], impulse["current"]),
+            "none",
+        )
+        self.assertEqual(
+            setup_signal(sell_imp["small"], sell_imp["middle"], sell_imp["hist"], sell_imp["current"]),
+            "none",
+        )
+        self.assertEqual(
+            setup_signal(
+                dict(impulse["small"], vs_ema="above_ema"),
+                impulse["middle"],
+                impulse["hist"],
+                impulse["current"],
+            ),
+            "none",
+        )
+
+    def test_no_buy_when_current_above_ema(self):
+        from analyzer.combo import setup_signal
+
+        classic = {
+            "current": {
+                "vs0": "below_0",
+                "vs_ema": "above_ema",
+                "ema_vs0": "below_0",
+            },
+            "small": {
+                "vs0": "below_0",
+                "vs_ema": "below_ema",
+                "ema_vs0": "below_0",
+                "ema_trend": "falling",
+            },
+            "middle": {
+                "vs0": "below_0",
+                "vs_ema": "below_ema",
+                "ema_vs0": "below_0",
+                "ema_trend": "falling",
+            },
+            "hist": {"hist_sign": "below_0", "hist_dir": "hist_growing"},
+        }
+        self.assertEqual(
+            setup_signal(
+                classic["small"], classic["middle"], classic["hist"], classic["current"]
+            ),
+            "none",
+        )
+        sell = {
+            "current": {
+                "vs0": "above_0",
+                "vs_ema": "below_ema",
+                "ema_vs0": "above_0",
+            },
+            "small": {
+                "vs0": "above_0",
+                "vs_ema": "above_ema",
+                "ema_vs0": "above_0",
+                "ema_trend": "rising",
+            },
+            "middle": {
+                "vs0": "above_0",
+                "vs_ema": "above_ema",
+                "ema_vs0": "above_0",
+                "ema_trend": "rising",
+            },
+            "hist": {"hist_sign": "above_0", "hist_dir": "hist_growing"},
+        }
+        self.assertEqual(
+            setup_signal(sell["small"], sell["middle"], sell["hist"], sell["current"]),
+            "none",
+        )
+
     def test_parse_and_compact_key(self):
         from analyzer.combo import compact_state, parse_key
 
@@ -872,6 +1075,111 @@ class ComboTests(unittest.TestCase):
                 ],
             )
             self.assertEqual(n, 9)
+
+    def test_watch_only_skips_other_instruments(self):
+        import tempfile
+
+        from analyzer.combo import CHART_TFS
+        from analyzer.marks import watch_marks
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            dest = data_dir / "marks"
+            for sec in ("GAZP", "SBER"):
+                for tf in CHART_TFS:
+                    (data_dir / f"{sec}_TQBR_{tf}_.csv").write_text("hdr\n", encoding="utf-8")
+            (data_dir / "SBER_TQBR_M1_.csv").write_text("hdr\n1\n", encoding="utf-8")
+            (data_dir / "GAZP_TQBR_M1_.csv").write_text("hdr\n1\n", encoding="utf-8")
+            calls: list[str] = []
+            sleeps = {"n": 0}
+
+            def exporter(sec, class_code, **kw):
+                calls.append(sec)
+                return {
+                    "sec": sec,
+                    "class_code": class_code,
+                    "dir": str(dest),
+                    "files": {},
+                    "counts": {},
+                }
+
+            def sleeper(_wait):
+                sleeps["n"] += 1
+
+            def stop():
+                return sleeps["n"] >= 1
+
+            n = watch_marks(
+                None,
+                data_dir=data_dir,
+                dest_dir=dest,
+                poll=1.0,
+                exporter=exporter,
+                sleeper=sleeper,
+                stop=stop,
+                log=lambda _msg: None,
+                only=[("SBER", "TQBR")],
+            )
+            self.assertGreater(n, 0)
+            self.assertTrue(calls)
+            self.assertNotIn("GAZP", calls)
+            self.assertEqual(set(calls), {"SBER"})
+
+    def test_watch_fair_queue_rotates_hot_head(self):
+        import tempfile
+
+        from analyzer.combo import CHART_TFS
+        from analyzer.marks import watch_marks
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            dest = data_dir / "marks"
+            for sec in ("AFLT", "VTBR"):
+                for tf in CHART_TFS:
+                    (data_dir / f"{sec}_TQBR_{tf}_.csv").write_text("hdr\n", encoding="utf-8")
+            (data_dir / "AFLT_TQBR_M1_.csv").write_text("hdr\n1\n", encoding="utf-8")
+            (data_dir / "VTBR_TQBR_M1_.csv").write_text("hdr\n1\n", encoding="utf-8")
+            calls: list[str] = []
+            sleeps = {"n": 0}
+
+            def exporter(sec, class_code, **kw):
+                calls.append(sec)
+                # Keep the head instrument dirty every poll (live M1 growth).
+                if sec == "AFLT":
+                    path = data_dir / "AFLT_TQBR_M1_.csv"
+                    path.write_text(path.read_text(encoding="utf-8") + "x\n", encoding="utf-8")
+                return {
+                    "sec": sec,
+                    "class_code": class_code,
+                    "dir": str(dest),
+                    "files": {},
+                    "counts": {},
+                }
+
+            def sleeper(_wait):
+                sleeps["n"] += 1
+
+            def stop():
+                return sleeps["n"] >= 2
+
+            watch_marks(
+                None,
+                data_dir=data_dir,
+                dest_dir=dest,
+                poll=1.0,
+                exporter=exporter,
+                sleeper=sleeper,
+                stop=stop,
+                log=lambda _msg: None,
+                only=[("AFLT", "TQBR"), ("VTBR", "TQBR")],
+                export_tfs=lambda dirty: ("M1",),
+                dirty_budget=1.0,
+                max_exports=1,
+            )
+            self.assertGreaterEqual(len(calls), 2)
+            self.assertEqual(calls[0], "AFLT")
+            self.assertIn("VTBR", calls)
+            self.assertEqual(calls[1], "VTBR")
 
     def test_load_csv_tail(self):
         import tempfile
@@ -1208,12 +1516,12 @@ class KrechetovWaveTests(unittest.TestCase):
 
 
 class OddsTests(unittest.TestCase):
-    def test_chain_window_is_three_on_every_tf(self):
+    def test_chain_window_is_five_on_every_tf(self):
         from analyzer.odds import CHAIN_BARS, CHAIN_WINDOW
 
-        self.assertEqual(CHAIN_BARS, 3)
-        for tf in ("M1", "M10", "M30", "H4", "D1"):
-            self.assertEqual(CHAIN_WINDOW[tf], 3)
+        self.assertEqual(CHAIN_BARS, 5)
+        for tf in ("M1", "M5", "M10", "M20", "M30", "H4", "D1"):
+            self.assertEqual(CHAIN_WINDOW[tf], 5)
 
     def test_forming_d1_appends_unfinished_day(self):
         from analyzer.odds import forming_d1
@@ -1605,12 +1913,33 @@ class OddsTests(unittest.TestCase):
 
         self.assertTrue(ODDS_DEAD_END)
         self.assertEqual(ODDS_LEAD_TFS, ("M10", "M30", "H4"))
-        self.assertEqual(BUNDLE_PAIRS, (("D1", "H4"), ("H4", "M30"), ("M30", "M10")))
-        self.assertEqual(set(BUNDLE_NAMES.values()), {"связкаД1Н4", "связкаН4М30", "связкаМ30М10"})
-        self.assertNotIn(("M10", "M1"), BUNDLE_PAIRS)
-        self.assertNotIn(("D1", "M30"), BUNDLE_PAIRS)
+        self.assertEqual(BUNDLE_PAIRS, (("M10", "M1"), ("M10", "M5"), ("M20", "M10")))
+        self.assertEqual(set(BUNDLE_NAMES.values()), {"связкаМ1М10", "связкаМ5М10", "связкаМ10М20"})
+        self.assertNotIn(("D1", "H4"), BUNDLE_PAIRS)
+        self.assertNotIn(("M30", "M10"), BUNDLE_PAIRS)
         with self.assertRaises(ValueError):
             odds_rows({"M1": []}, "M1")
+
+    def test_pair_chain_sim_needs_both_tfs(self):
+        from analyzer.patterns import pair_chain_sim
+
+        live = self._chain_item(1.0, 0.2, 0.8, 0.3)
+        same = self._chain_item(1.0, 0.2, 0.8, 0.3)
+        flipped = self._chain_item(0.2, 1.0, 0.8, 0.3)
+        live_chain = [live, live]
+        same_chain = [same, same]
+        self.assertGreaterEqual(
+            pair_chain_sim(live_chain, live_chain, same_chain, same_chain),
+            0.60,
+        )
+        self.assertEqual(
+            pair_chain_sim(live_chain, live_chain, [flipped, flipped], same_chain),
+            0.0,
+        )
+        self.assertEqual(
+            pair_chain_sim(live_chain, live_chain, same_chain, [flipped, flipped]),
+            0.0,
+        )
 
     def test_write_odds_csv(self):
         import tempfile
@@ -1772,16 +2101,83 @@ class OddsTests(unittest.TestCase):
             self.assertEqual(calls, [("M10", "M30", "H4")])
 
 
+class PatternBundleTests(unittest.TestCase):
+    def test_pattern_dim_and_empty(self):
+        from analyzer.patterns import (
+            PATTERN_DIM,
+            PATTERN_PAIR_DIM,
+            empty_pattern_vec,
+            pattern_pair_names,
+        )
+
+        self.assertEqual(PATTERN_PAIR_DIM, 4)
+        self.assertEqual(PATTERN_DIM, 12)
+        self.assertEqual(empty_pattern_vec(), [0.0] * 12)
+        self.assertEqual(
+            pattern_pair_names(),
+            ("связкаМ1М10", "связкаМ5М10", "связкаМ10М20"),
+        )
+
+    def test_tf_chain_frames_need_five_packs(self):
+        from analyzer.patterns import tf_chain_frames
+
+        pack = {
+            "dt": datetime(2026, 10, 1, 10, 0),
+            "c": 1.0,
+            "current": {"rpm": 1.0, "ema": 0.5, "d_rpm": 0.1, "d_ema": 0.05, "d_hist": None},
+            "small": {"rpm": 1.0, "ema": 0.4, "hist": 0.2, "d_rpm": 0.1, "d_ema": 0.05, "d_hist": 0.02},
+            "middle": {"rpm": 0.8, "ema": 0.3, "hist": 0.1, "d_rpm": 0.1, "d_ema": 0.05, "d_hist": 0.02},
+            "hist": {"hist": 0.2, "d_rpm": None, "d_ema": None, "d_hist": 0.02},
+            "hist_raw": {"hist": 0.2, "hist_up": 0.2, "hist_dw": None},
+        }
+        scales = {
+            "current.rpm": 1.0,
+            "current.ema": 1.0,
+            "small.rpm": 1.0,
+            "small.ema": 1.0,
+            "small.hist": 1.0,
+            "middle.rpm": 1.0,
+            "middle.ema": 1.0,
+            "middle.hist": 1.0,
+            "hist.hist": 1.0,
+        }
+        book = {"packs": [dict(pack) for _ in range(4)], "scales": scales}
+        short = tf_chain_frames(book, "M10")
+        self.assertEqual(len(short), 4)
+        self.assertTrue(all(item is None for item in short))
+        book5 = {"packs": [dict(pack) for _ in range(5)], "scales": scales}
+        long = tf_chain_frames(book5, "M10")
+        self.assertEqual(len(long), 5)
+        self.assertIsNone(long[3])
+        self.assertIsNotNone(long[4])
+        self.assertEqual(len(long[4]), 5)
+
+
 class NetTests(unittest.TestCase):
     def test_dims_and_empty_pack(self):
-        from analyzer.net import BUNDLE_PAIRS, CHAIN_BARS, FRAME_DIM, IN_DIM, TF_DIM, pack_vec
+        from analyzer.net import (
+            FRAME_DIM,
+            IN_DIM,
+            NET_BUNDLE_NAME,
+            NET_BUNDLE_TFS,
+            NET_CHAIN_BARS,
+            NET_CHAIN_PACKS,
+            POINT_TFS,
+            TF_DIM,
+            pack_vec,
+        )
+        from analyzer.patterns import PATTERN_DIM
 
-        self.assertEqual(TF_DIM, 34)
-        self.assertEqual(CHAIN_BARS, 3)
-        self.assertEqual(BUNDLE_PAIRS, (("D1", "H4"), ("H4", "M30"), ("M30", "M10")))
-        self.assertEqual(FRAME_DIM, TF_DIM * CHAIN_BARS * 2)
-        self.assertEqual(IN_DIM, FRAME_DIM)
-        self.assertEqual(IN_DIM, 204)
+        self.assertEqual(TF_DIM, 53)
+        self.assertEqual(NET_CHAIN_BARS, {"M1": 2, "M5": 2, "M10": 2, "M20": 1})
+        self.assertEqual(NET_CHAIN_PACKS, 7)
+        self.assertEqual(NET_BUNDLE_TFS, ("M1", "M5", "M10", "M20"))
+        self.assertEqual(NET_BUNDLE_NAME, "связкаМ1М5М10М20")
+        self.assertEqual(POINT_TFS, ("M10",))
+        self.assertEqual(FRAME_DIM, TF_DIM * NET_CHAIN_PACKS)
+        self.assertEqual(PATTERN_DIM, 12)
+        self.assertEqual(IN_DIM, FRAME_DIM + PATTERN_DIM)
+        self.assertEqual(IN_DIM, 383)
         zeros = pack_vec(None, None, [], 0, {})
         self.assertEqual(len(zeros), TF_DIM)
         self.assertTrue(all(v == 0.0 for v in zeros))
@@ -1805,45 +2201,41 @@ class NetTests(unittest.TestCase):
         self.assertEqual(padded[2 * TF_DIM :], ok)
         self.assertIsNone(_chain_pack_vecs([miss], 0))
 
-    def test_frame_at_three_bundle_chains(self):
-        from analyzer.net import FRAME_DIM, IN_DIM, TF_DIM, _bundles_at
+    def test_frame_at_m1_m5_m10_m20_bundle(self):
+        from analyzer.net import FRAME_DIM, IN_DIM, TF_DIM, _net_bundle_vec
 
         def pack(n: float, ok: float = 1.0) -> list[float]:
             return [n] * (TF_DIM - 1) + [ok]
 
         vecs = {
-            "D1": [pack(1), pack(2), pack(3)],
-            "H4": [pack(4), pack(5), pack(6)],
-            "M30": [pack(7), pack(8), pack(9)],
+            "M1": [pack(1), pack(2), pack(3)],
+            "M5": [pack(4), pack(5), pack(6)],
             "M10": [pack(10), pack(11), pack(12)],
+            "M20": [pack(20), pack(21), pack(22)],
         }
-        align = {"D1": [2], "H4": [2], "M30": [2], "M10": [2]}
-        bundles = _bundles_at(vecs, align, 0)
-        self.assertEqual(len(bundles), 3)
-        self.assertTrue(all(len(part) == IN_DIM == FRAME_DIM for part in bundles))
-        d1h4 = [bundles[0][i * TF_DIM] for i in range(6)]
-        h4m30 = [bundles[1][i * TF_DIM] for i in range(6)]
-        m30m10 = [bundles[2][i * TF_DIM] for i in range(6)]
-        self.assertEqual(d1h4, [1, 2, 3, 4, 5, 6])
-        self.assertEqual(h4m30, [4, 5, 6, 7, 8, 9])
-        self.assertEqual(m30m10, [7, 8, 9, 10, 11, 12])
+        align = {"M1": [2], "M5": [2], "M10": [2], "M20": [2]}
+        part = _net_bundle_vec(vecs, align, 0)
+        self.assertIsNotNone(part)
+        self.assertEqual(len(part), FRAME_DIM)
+        self.assertEqual(FRAME_DIM, TF_DIM * 7)
+        self.assertEqual(IN_DIM, FRAME_DIM + 12)
+        heads = [part[i * TF_DIM] for i in range(7)]
+        self.assertEqual(heads, [2, 3, 5, 6, 11, 12, 22])
         bad = dict(vecs)
-        bad["D1"] = [pack(1, ok=0.0)]
-        left = _bundles_at(bad, {"D1": [0], "H4": [2], "M30": [2], "M10": [2]}, 0)
-        self.assertEqual(len(left), 2)
+        bad["M20"] = [pack(1, ok=0.0)]
+        self.assertIsNone(_net_bundle_vec(bad, {"M1": [2], "M5": [2], "M10": [2], "M20": [0]}, 0))
 
     def test_bundle_ahead_clocks_and_m5(self):
         from datetime import datetime
 
         from analyzer.bars import Bar
-        from analyzer.net import BUNDLE_AHEAD, ahead_horizon_m1, bars_from_m1
+        from analyzer.net import AHEAD_BARS_BY_HEAD, ahead_horizon_m1, bars_from_m1
 
-        self.assertEqual(BUNDLE_AHEAD[("M30", "M10")], {"clock": "M1", "period": 1, "bars": 10})
-        self.assertEqual(BUNDLE_AHEAD[("H4", "M30")], {"clock": "M5", "period": 5, "bars": 6})
-        self.assertEqual(BUNDLE_AHEAD[("D1", "H4")], {"clock": "M30", "period": 30, "bars": 8})
-        self.assertEqual(ahead_horizon_m1(("M30", "M10")), 10)
-        self.assertEqual(ahead_horizon_m1(("H4", "M30")), 30)
-        self.assertEqual(ahead_horizon_m1(("D1", "H4")), 240)
+        self.assertEqual(AHEAD_BARS_BY_HEAD, (20, 10, 5, 1))
+        self.assertEqual(ahead_horizon_m1(3), 1)
+        self.assertEqual(ahead_horizon_m1(2), 5)
+        self.assertEqual(ahead_horizon_m1(1), 10)
+        self.assertEqual(ahead_horizon_m1(0), 20)
         t0 = datetime(2026, 10, 2, 10, 0)
         m1 = [
             Bar(dt=t0.replace(minute=t0.minute + i), o=1.0 + i, h=2.0 + i, l=0.5, c=1.5 + i)
@@ -1855,20 +2247,35 @@ class NetTests(unittest.TestCase):
         self.assertEqual(m5[0].o, 1.0)
         self.assertEqual(m5[0].c, 1.5 + 4)
         self.assertEqual(m5[0].h, 2.0 + 4)
+        t25 = datetime(2026, 10, 2, 10, 0)
+        m1_25 = [
+            Bar(dt=t25.replace(minute=i), o=1.0, h=2.0, l=0.5, c=1.0)
+            for i in range(50)
+        ]
+        m25 = bars_from_m1(m1_25, 25)
+        self.assertEqual([b.dt for b in m25], [t25, t25.replace(minute=25)])
+        m20 = bars_from_m1(m1_25, 20)
+        self.assertEqual(m20[0].dt, t25)
+        self.assertEqual(m20[1].dt, t25.replace(minute=20))
+        h1 = bars_from_m1(m1_25, 60)
+        self.assertEqual(len(h1), 1)
+        self.assertEqual(h1[0].dt, t25)
 
-    def test_ahead_pair_for_chart_tf(self):
-        from analyzer.net import BUNDLE_PAIRS, N_AHEAD_HEADS, ahead_head_index, ahead_pair_for_tf
+    def test_ahead_head_for_chart_tf(self):
+        from analyzer.net import N_AHEAD_HEADS, ahead_head_for_tf, ahead_horizon_m1
 
-        self.assertEqual(N_AHEAD_HEADS, 3)
-        self.assertEqual(ahead_head_index(("D1", "H4")), 0)
-        self.assertEqual(ahead_head_index(("H4", "M30")), 1)
-        self.assertEqual(ahead_head_index(("M30", "M10")), 2)
-        self.assertEqual(ahead_pair_for_tf("M1"), ("M30", "M10"))
-        self.assertEqual(ahead_pair_for_tf("M10"), ("M30", "M10"))
-        self.assertEqual(ahead_pair_for_tf("M30"), ("H4", "M30"))
-        self.assertEqual(ahead_pair_for_tf("H4"), ("D1", "H4"))
-        self.assertEqual(ahead_pair_for_tf("D1"), ("D1", "H4"))
-        self.assertEqual(BUNDLE_PAIRS[ahead_head_index(ahead_pair_for_tf("M10"))], ("M30", "M10"))
+        self.assertEqual(N_AHEAD_HEADS, 4)
+        self.assertEqual(ahead_head_for_tf("M1"), 3)
+        self.assertEqual(ahead_head_for_tf("M5"), 2)
+        self.assertEqual(ahead_head_for_tf("M10"), 1)
+        self.assertEqual(ahead_head_for_tf("M20"), 0)
+        self.assertEqual(ahead_head_for_tf("M30"), 0)
+        self.assertEqual(ahead_head_for_tf("H4"), 0)
+        self.assertEqual(ahead_head_for_tf("D1"), 0)
+        self.assertEqual(ahead_horizon_m1(ahead_head_for_tf("M1")), 1)
+        self.assertEqual(ahead_horizon_m1(ahead_head_for_tf("M5")), 5)
+        self.assertEqual(ahead_horizon_m1(ahead_head_for_tf("M10")), 10)
+        self.assertEqual(ahead_horizon_m1(ahead_head_for_tf("M20")), 20)
 
     def test_replay_h4_forming_does_not_see_later_slot_high(self):
         from analyzer.net import TF_DIM, _chain_forming, build_books
@@ -1926,7 +2333,7 @@ class NetTests(unittest.TestCase):
         self.assertEqual(chained[2 * TF_DIM :], forming_ok)
 
     def test_pack_vec_marks_and_z(self):
-        from analyzer.net import SETUP_NAMES, pack_vec
+        from analyzer.net import SETUP_NAMES, _NUM_FIELDS, pack_vec
 
         scales = {
             "current.rpm": 1.0,
@@ -1946,11 +2353,20 @@ class NetTests(unittest.TestCase):
             "hist_raw": {"hist": -0.4, "hist_up": None, "hist_dw": -0.4},
         }
         vec = pack_vec(pack, None, [pack], 0, scales)
-        self.assertEqual(len(vec), 34)
+        self.assertEqual(len(vec), 53)
         self.assertEqual(vec[0], -1.0)
         self.assertEqual(vec[-1], 1.0)
-        none_i = 13 + 8 + SETUP_NAMES.index("none")
+        self.assertIn(("small", "d_ema"), _NUM_FIELDS)
+        self.assertIn(("small", "d_hist"), _NUM_FIELDS)
+        self.assertIn(("middle", "d_rpm"), _NUM_FIELDS)
+        self.assertIn(("middle", "d_ema"), _NUM_FIELDS)
+        self.assertIn(("middle", "d_hist"), _NUM_FIELDS)
+        self.assertEqual(vec[_NUM_FIELDS.index(("small", "d_ema"))], 0.0)
+        self.assertEqual(vec[_NUM_FIELDS.index(("middle", "d_hist"))], 0.05)
+        none_i = len(_NUM_FIELDS) + 20 + SETUP_NAMES.index("none")
         self.assertEqual(vec[none_i], 1.0)
+        self.assertIn("buy3", SETUP_NAMES)
+        self.assertIn("sell3", SETUP_NAMES)
 
     def test_label_bar_pullback_and_entries(self):
         from analyzer.net import ACTION_NAMES, REGIME_NAMES, label_bar
@@ -2189,12 +2605,14 @@ class NetTests(unittest.TestCase):
         up = np.array([0.1, 0.8, 0.1], dtype=np.float32)
         self.assertEqual(action_from_ph_mean(up), "buy_in")
         self.assertEqual(action_from_ph_mean(np.array([0.8, 0.1, 0.1])), "none")
-        self.assertEqual(action_from_ph_mean(np.array([0.1, 0.42, 0.40])), "none")
+        self.assertEqual(action_from_ph_mean(np.array([0.1, 0.48, 0.42])), "none")
+        self.assertEqual(action_from_ph_mean(np.array([0.08, 0.55, 0.37])), "buy_in")
         self.assertEqual(action_from_ph_mean(None), "none")
         ph_by = {
-            ("M30", "M10"): np.array([0.1, 0.8, 0.1], dtype=np.float32),
-            ("H4", "M30"): np.array([0.1, 0.7, 0.2], dtype=np.float32),
-            ("D1", "H4"): np.array([0.2, 0.6, 0.2], dtype=np.float32),
+            3: np.array([0.1, 0.8, 0.1], dtype=np.float32),
+            2: np.array([0.1, 0.8, 0.1], dtype=np.float32),
+            1: np.array([0.1, 0.7, 0.2], dtype=np.float32),
+            0: np.array([0.2, 0.6, 0.2], dtype=np.float32),
         }
         mixed = mix_ahead_probs(ph_by)
         self.assertIsNotNone(mixed)
@@ -2202,12 +2620,12 @@ class NetTests(unittest.TestCase):
         pa = pa_from_ahead_mix(mixed)
         self.assertEqual(float(pa[3]), 0.0)
         self.assertEqual(float(pa[4]), 0.0)
-        self.assertIsNone(mix_ahead_probs({("M30", "M10"): up}))
+        self.assertIsNone(mix_ahead_probs({2: up}))
         row = {"action": "buy_in", "buy_in": 80.0}
         self.assertEqual(strip_action_points(row)["action"], "none")
         self.assertEqual(row["action"], "buy_in")
 
-    def test_pred_row_ahead_is_three_head_mean(self):
+    def test_pred_row_ahead_is_four_head_mean(self):
         import numpy as np
 
         from analyzer.net import _pred_row
@@ -2224,6 +2642,88 @@ class NetTests(unittest.TestCase):
         self.assertEqual(row["ahead"], "ahead_up")
         self.assertEqual(row["buy_out"], 0.0)
         self.assertEqual(row["sell_out"], 0.0)
+
+    def test_point_from_pair_head_and_impulse_veto(self):
+        import numpy as np
+
+        from analyzer.net import (
+            MIN_EPOCHS,
+            MOVE_WEIGHT_CAP,
+            PATIENCE,
+            ahead_move_weight,
+            apply_point_tf,
+            point_from_pair_ph,
+            veto_against_impulse,
+        )
+
+        self.assertEqual(veto_against_impulse("sell_in", 1, 1), "none")
+        self.assertEqual(veto_against_impulse("buy_in", -1, 1), "none")
+        self.assertEqual(veto_against_impulse("sell_in", 1, 2), "sell_in")
+        self.assertEqual(veto_against_impulse("buy_in", 1, 1), "buy_in")
+        sell = np.array([0.1, 0.2, 0.7], dtype=np.float32)
+        act, _buy, sell_p = point_from_pair_ph(sell, senior_dir=1, regime=1)
+        self.assertEqual(act, "none")
+        self.assertGreater(sell_p, 50.0)
+        self.assertEqual(point_from_pair_ph(sell, senior_dir=-1, regime=1)[0], "sell_in")
+        mix_up = np.array([0.1, 0.7, 0.2], dtype=np.float32)
+        mix_dn = np.array([0.1, 0.2, 0.7], dtype=np.float32)
+        self.assertEqual(
+            point_from_pair_ph(sell, senior_dir=-1, regime=1, mix=mix_dn)[0],
+            "sell_in",
+        )
+        self.assertEqual(
+            point_from_pair_ph(sell, senior_dir=-1, regime=1, mix=mix_up)[0],
+            "none",
+        )
+        from analyzer.net import ACTION_GAP, ACTION_MIN
+
+        self.assertAlmostEqual(ACTION_MIN, 0.52)
+        self.assertAlmostEqual(ACTION_GAP, 0.10)
+        rows = [
+            {
+                "action": "buy_in",
+                "buy_in": 70.0,
+                "sell_in": 10.0,
+                "ahead_up": 60.0,
+                "action_M10": "none",
+                "buy_in_M10": 20.0,
+                "sell_in_M10": 65.0,
+                "action_M30": "buy_in",
+                "buy_in_M30": 80.0,
+                "sell_in_M30": 5.0,
+            }
+        ]
+        m10 = apply_point_tf(rows, "M10")[0]
+        self.assertEqual(m10["action"], "none")
+        self.assertAlmostEqual(m10["sell_in"], 65.0)
+        self.assertAlmostEqual(m10["ahead_up"], 60.0)
+        m30 = apply_point_tf(rows, "M30")[0]
+        self.assertEqual(m30["action"], "none")
+        self.assertEqual(MIN_EPOCHS, 16)
+        self.assertEqual(PATIENCE, 12)
+        closes = [10.0] + [10.0] * 5 + [12.0]
+        w = ahead_move_weight(0, closes, closes, closes, bars=6, flat_pct=1.0)
+        self.assertGreater(w, 1.0)
+        self.assertLessEqual(w, MOVE_WEIGHT_CAP)
+
+    def test_per_sec_weights_paths(self):
+        import tempfile
+        from pathlib import Path
+
+        from analyzer.net import net_save_paths, resolve_live_weights, sec_weights_path, weights_path
+
+        dest = Path(tempfile.gettempdir()) / "scrquik-net-test"
+        paths = net_save_paths("CNY12.26", "SPBFUT", dest)
+        self.assertTrue(paths)
+        self.assertTrue(all(p.name != "net.npz" for p in paths))
+        self.assertTrue(any(p == sec_weights_path("CNY12.26", "SPBFUT", dest) for p in paths))
+        self.assertEqual(net_save_paths(None, None, dest), [weights_path(dest)])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.assertEqual(resolve_live_weights("CNY12.26", "SPBFUT", root), weights_path(root))
+            per = sec_weights_path("CNY12.26", "SPBFUT", root)
+            per.write_bytes(b"x")
+            self.assertEqual(resolve_live_weights("CNY12.26", "SPBFUT", root), per)
 
     def test_window_indices_stride(self):
         from analyzer.net import STRIDE, _sample_indices, window_indices
@@ -2257,7 +2757,7 @@ class NetTests(unittest.TestCase):
 
     def test_horizon_flat_threshold_uses_window_excursion(self):
         from analyzer.odds import FLAT_FRAC, flat_threshold
-        from analyzer.net import ahead_flat_by_pair, ahead_label, horizon_flat_threshold
+        from analyzer.net import ahead_flat_by_head, ahead_label, horizon_flat_threshold
 
         n = 400
         closes = [100.0] * n
@@ -2281,38 +2781,38 @@ class NetTests(unittest.TestCase):
         mild_c = [100.0] * 50
         self.assertEqual(ahead_label(0, mild_h, mild_l, mild_c, 0.5, bars=30), 0)
         self.assertEqual(ahead_label(0, mild_h, mild_l, mild_c, 0.1, bars=30), 1)
-        by_pair = ahead_flat_by_pair(saw_h, saw_l, closes)
-        self.assertGreater(by_pair[("D1", "H4")], by_pair[("M30", "M10")])
+        by_head = ahead_flat_by_head(saw_h, saw_l, closes)
+        self.assertGreater(by_head[0], by_head[2])
 
-    def test_action_from_three_aheads_and_right_edge(self):
+    def test_action_from_four_aheads_and_right_edge(self):
         from analyzer.net import (
             action_from_aheads,
             action_probs_from_aheads,
             max_ahead_m1,
-            pair_ahead_labels,
+            head_ahead_labels,
             train_label_stop,
         )
 
-        self.assertEqual(max_ahead_m1(), 240)
-        self.assertEqual(train_label_stop(1000, overlay=False), 760)
+        self.assertEqual(max_ahead_m1(), 20)
+        self.assertEqual(train_label_stop(1000, overlay=False), 980)
         self.assertEqual(train_label_stop(1000, overlay=True), 1000)
-        up = {("M30", "M10"): 1, ("H4", "M30"): 1, ("D1", "H4"): 1}
+        up = {3: 1, 2: 1, 1: 1, 0: 1}
         self.assertEqual(action_from_aheads(up), 1)
         self.assertEqual(action_probs_from_aheads(up), (0.0, 1.0, 0.0))
-        down2 = {("M30", "M10"): 2, ("H4", "M30"): 2, ("D1", "H4"): 0}
-        self.assertEqual(action_from_aheads(down2), 2)
-        p = action_probs_from_aheads(down2)
-        self.assertAlmostEqual(p[0], 1.0 / 3.0)
-        self.assertAlmostEqual(p[2], 2.0 / 3.0)
-        mixed = {("M30", "M10"): 1, ("H4", "M30"): 2, ("D1", "H4"): 0}
+        down3 = {3: 2, 2: 2, 1: 2, 0: 0}
+        self.assertEqual(action_from_aheads(down3), 2)
+        p = action_probs_from_aheads(down3)
+        self.assertAlmostEqual(p[0], 0.25)
+        self.assertAlmostEqual(p[2], 0.75)
+        mixed = {3: 1, 2: 2, 1: 0, 0: 0}
         self.assertEqual(action_from_aheads(mixed), 0)
         n = 300
         closes = [100.0] * n
         highs = [100.5] * n
         lows = [99.5] * n
-        flats = {("M30", "M10"): 0.1, ("H4", "M30"): 0.1, ("D1", "H4"): 0.1}
-        self.assertIsNone(pair_ahead_labels(n - 240, highs, lows, closes, flats, 0.3))
-        self.assertIsNotNone(pair_ahead_labels(n - 241, highs, lows, closes, flats, 0.3))
+        flats = {3: 0.1, 2: 0.1, 1: 0.1, 0: 0.1}
+        self.assertIsNone(head_ahead_labels(n - 20, highs, lows, closes, flats, 0.3))
+        self.assertIsNotNone(head_ahead_labels(n - 21, highs, lows, closes, flats, 0.3))
 
     def test_softmax_and_mlp_roundtrip(self):
         import tempfile
@@ -2363,22 +2863,25 @@ class NetTests(unittest.TestCase):
             self.assertIn(pred["ahead"], ("ahead_flat", "ahead_up", "ahead_down"))
             self.assertIn("Wh0", np.load(path).files)
             pr, pa, phs = loaded.predict_proba(((X[-1] - m2) / s2).astype(np.float32)[None, :])
-            self.assertEqual(phs.shape, (1, 3, 3))
+            self.assertEqual(phs.shape, (1, 4, 3))
 
     def test_ph_for_tf_not_mixed(self):
         import numpy as np
 
         from analyzer.net import _ph_for_tf
 
+        m1 = np.array([0.2, 0.7, 0.1], dtype=np.float32)
+        m5 = np.array([0.15, 0.75, 0.1], dtype=np.float32)
         m10 = np.array([0.1, 0.8, 0.1], dtype=np.float32)
-        m30 = np.array([0.1, 0.1, 0.8], dtype=np.float32)
-        h4 = np.array([0.9, 0.05, 0.05], dtype=np.float32)
-        ph_by = {("M30", "M10"): m10, ("H4", "M30"): m30, ("D1", "H4"): h4}
+        m20 = np.array([0.9, 0.05, 0.05], dtype=np.float32)
+        ph_by = {3: m1, 2: m5, 1: m10, 0: m20}
+        self.assertIs(_ph_for_tf(ph_by, "M1"), m1)
+        self.assertIs(_ph_for_tf(ph_by, "M5"), m5)
         self.assertIs(_ph_for_tf(ph_by, "M10"), m10)
-        self.assertIs(_ph_for_tf(ph_by, "M1"), m10)
-        self.assertIs(_ph_for_tf(ph_by, "M30"), m30)
-        self.assertIs(_ph_for_tf(ph_by, "H4"), h4)
-        self.assertIs(_ph_for_tf(ph_by, "D1"), h4)
+        self.assertIs(_ph_for_tf(ph_by, "M20"), m20)
+        self.assertIs(_ph_for_tf(ph_by, "M30"), m20)
+        self.assertIs(_ph_for_tf(ph_by, "H4"), m20)
+        self.assertIs(_ph_for_tf(ph_by, "D1"), m20)
 
     def test_align_net_rows_and_csv(self):
         import tempfile
@@ -2486,6 +2989,203 @@ class NetTests(unittest.TestCase):
         self.assertEqual(live[0]["impulse"], 40.0)
         self.assertEqual(live[1]["impulse"], 70.0)
         self.assertEqual(live[1]["action"], "buy_in")
+        blank = dict(old[0], dt=t0, ahead_flat=0.0, ahead_up=0.0, ahead_down=0.0)
+        filled = dict(blank, ahead_flat=20.0, ahead_up=50.0, ahead_down=30.0, impulse=11.0)
+        fixed = freeze_closed_rows([blank], [filled], "M30", clock)
+        self.assertEqual(fixed[0]["ahead_up"], 50.0)
+        self.assertEqual(fixed[0]["impulse"], 11.0)
+        new_point = dict(old[0], impulse=10.0, action="sell_in", buy_in=5.0, sell_in=70.0, regime="pullback")
+        rewritten = freeze_closed_rows(old, [new_point], "M30", clock)
+        self.assertEqual(rewritten[0]["impulse"], 40.0)
+        self.assertEqual(rewritten[0]["action"], "sell_in")
+        self.assertEqual(rewritten[0]["sell_in"], 70.0)
+
+    def test_overlay_freeze_keeps_closed_when_window_grows(self):
+        from analyzer.net import overlay_freeze_rows
+        from analyzer.odds import ODDS_MAX_BARS
+
+        self.assertEqual(ODDS_MAX_BARS["M1"], 6000)
+        t_old = datetime(2026, 9, 28, 12, 0)
+        t_new = datetime(2026, 9, 21, 12, 0)
+        old = [{"dt": t_old, "impulse": 100.0}]
+        new = [{"dt": t_new, "impulse": 30.0}, {"dt": t_old, "impulse": 40.0}]
+        clock = datetime(2026, 10, 5, 12, 0)
+        grew = overlay_freeze_rows(old, new, "H4", clock)
+        self.assertEqual(grew[0]["dt"], t_new)
+        self.assertEqual(grew[0]["impulse"], 30.0)
+        self.assertEqual(grew[1]["dt"], t_old)
+        self.assertEqual(grew[1]["impulse"], 100.0)
+        t_left = datetime(2026, 9, 15, 16, 0)
+        long_old = [
+            {"dt": t_left, "impulse": 1.0, "ahead_flat": 10.0, "ahead_up": 40.0, "ahead_down": 50.0},
+            {"dt": t_old, "impulse": 100.0, "ahead_flat": 10.0, "ahead_up": 40.0, "ahead_down": 50.0},
+        ]
+        short_new = [
+            {"dt": t_old, "impulse": 40.0, "ahead_flat": 10.0, "ahead_up": 40.0, "ahead_down": 50.0},
+        ]
+        shrunk = overlay_freeze_rows(long_old, short_new, "H4", clock)
+        self.assertEqual([row["dt"] for row in shrunk], [t_left, t_old])
+        self.assertEqual(shrunk[0]["impulse"], 1.0)
+        self.assertEqual(shrunk[1]["impulse"], 100.0)
+
+
+class WatchPoolTests(unittest.TestCase):
+    def test_parse_watch_only(self):
+        from analyzer.watch_pool import parse_watch_only
+
+        self.assertIsNone(parse_watch_only(None))
+        self.assertIsNone(parse_watch_only("  "))
+        self.assertEqual(parse_watch_only("GAZP"), [("GAZP", "TQBR")])
+        self.assertEqual(
+            parse_watch_only("GAZP:TQBR,CNY12.26:SPBFUT"),
+            [("GAZP", "TQBR"), ("CNY12.26", "SPBFUT")],
+        )
+
+    def test_auto_jobs(self):
+        from analyzer.watch_pool import auto_jobs
+
+        self.assertEqual(auto_jobs(0, None), 0)
+        self.assertEqual(auto_jobs(52, 0), 52)
+        self.assertEqual(auto_jobs(52, 4), 4)
+        self.assertEqual(auto_jobs(3, 8), 3)
+        self.assertEqual(auto_jobs(52, 20, cap=8), 8)
+        self.assertEqual(auto_jobs(52, None, cpu=16, cap=8), 8)
+        self.assertEqual(auto_jobs(3, None, cpu=16, cap=8), 3)
+        self.assertEqual(auto_jobs(52, None, cpu=4, cap=8), 4)
+
+    def test_split_universe(self):
+        from analyzer.watch_pool import split_universe
+
+        u = [("A", "TQBR"), ("B", "TQBR"), ("C", "TQBR")]
+        self.assertEqual(
+            split_universe(u, 0),
+            [[("A", "TQBR")], [("B", "TQBR")], [("C", "TQBR")]],
+        )
+        self.assertEqual(
+            split_universe(u, 2),
+            [[("A", "TQBR"), ("C", "TQBR")], [("B", "TQBR")]],
+        )
+        self.assertEqual(split_universe(u, 99), [[("A", "TQBR")], [("B", "TQBR")], [("C", "TQBR")]])
+        self.assertEqual(split_universe([], 4), [])
+
+    def test_worker_cmd(self):
+        from analyzer.watch_pool import worker_cmd
+
+        one = worker_cmd([("CNY12.26", "SPBFUT")], 11.0)
+        self.assertIn("--watch-net", one)
+        self.assertEqual(one[one.index("--sec") + 1], "CNY12.26")
+        self.assertEqual(one[one.index("--class-code") + 1], "SPBFUT")
+        many = worker_cmd([("GAZP", "TQBR"), ("SBER", "TQBR")], 11.0)
+        self.assertIn("--watch-only", many)
+        self.assertEqual(many[many.index("--watch-only") + 1], "GAZP:TQBR,SBER:TQBR")
+        self.assertNotIn("--sec", many)
+
+    def test_pool_spawns_one_process_per_instrument(self):
+        import tempfile
+
+        from analyzer.combo import CHART_TFS
+        from analyzer.watch_pool import watch_net_pool
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            for sec in ("GAZP", "SBER"):
+                for tf in CHART_TFS:
+                    (data_dir / f"{sec}_TQBR_{tf}_.csv").write_text("hdr\n", encoding="utf-8")
+            spawned: list[list[str]] = []
+            sleeps = {"n": 0}
+
+            class FakeProc:
+                def __init__(self, cmd, **_kw):
+                    spawned.append(list(cmd))
+                    self._code = None
+
+                def poll(self):
+                    return self._code
+
+                def terminate(self):
+                    self._code = 0
+
+                def kill(self):
+                    self._code = -9
+
+                def wait(self, timeout=None):
+                    return self._code
+
+            def sleeper(_wait):
+                sleeps["n"] += 1
+
+            def stop():
+                return sleeps["n"] >= 1
+
+            n = watch_net_pool(
+                None,
+                data_dir=data_dir,
+                poll=11.0,
+                jobs=0,
+                sleeper=sleeper,
+                stop=stop,
+                log=lambda _msg: None,
+                popen=FakeProc,
+                spawn_pause=0.0,
+            )
+            self.assertEqual(n, 2)
+            self.assertEqual(len(spawned), 2)
+            secs = {cmd[cmd.index("--sec") + 1] for cmd in spawned}
+            self.assertEqual(secs, {"GAZP", "SBER"})
+
+    def test_pool_jobs_shards_watch_only(self):
+        import tempfile
+
+        from analyzer.combo import CHART_TFS
+        from analyzer.watch_pool import watch_net_pool
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            for sec in ("GAZP", "SBER", "VTBR"):
+                for tf in CHART_TFS:
+                    (data_dir / f"{sec}_TQBR_{tf}_.csv").write_text("hdr\n", encoding="utf-8")
+            spawned: list[list[str]] = []
+            sleeps = {"n": 0}
+
+            class FakeProc:
+                def __init__(self, cmd, **_kw):
+                    spawned.append(list(cmd))
+                    self._code = None
+
+                def poll(self):
+                    return self._code
+
+                def terminate(self):
+                    self._code = 0
+
+                def kill(self):
+                    self._code = -9
+
+                def wait(self, timeout=None):
+                    return self._code
+
+            def sleeper(_wait):
+                sleeps["n"] += 1
+
+            def stop():
+                return sleeps["n"] >= 1
+
+            n = watch_net_pool(
+                None,
+                data_dir=data_dir,
+                poll=11.0,
+                jobs=2,
+                sleeper=sleeper,
+                stop=stop,
+                log=lambda _msg: None,
+                popen=FakeProc,
+                spawn_pause=0.0,
+            )
+            self.assertEqual(n, 2)
+            self.assertEqual(len(spawned), 2)
+            only_flags = [cmd[cmd.index("--watch-only") + 1] for cmd in spawned if "--watch-only" in cmd]
+            sec_flags = [cmd for cmd in spawned if "--sec" in cmd]
+            self.assertEqual(len(only_flags) + len(sec_flags), 2)
 
 
 if __name__ == "__main__":

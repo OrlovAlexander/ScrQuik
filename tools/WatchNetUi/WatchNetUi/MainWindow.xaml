@@ -1,0 +1,101 @@
+﻿<Window x:Class="WatchNetUi.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="WatchNet — монитор"
+        Height="720" Width="1100"
+        MinHeight="480" MinWidth="800"
+        Background="#FF1B1E24"
+        Foreground="#FFE8EAED"
+        FontFamily="Segoe UI"
+        Closing="Window_Closing">
+  <Window.Resources>
+    <Style TargetType="Button">
+      <Setter Property="Padding" Value="12,6"/>
+      <Setter Property="Margin" Value="0,0,8,0"/>
+      <Setter Property="Background" Value="#FF2D333B"/>
+      <Setter Property="Foreground" Value="#FFE8EAED"/>
+      <Setter Property="BorderBrush" Value="#FF3D4450"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style TargetType="TextBox">
+      <Setter Property="Background" Value="#FF12151A"/>
+      <Setter Property="Foreground" Value="#FFE8EAED"/>
+      <Setter Property="BorderBrush" Value="#FF3D4450"/>
+      <Setter Property="Padding" Value="6,4"/>
+    </Style>
+    <Style TargetType="DataGrid">
+      <Setter Property="Background" Value="#FF12151A"/>
+      <Setter Property="Foreground" Value="#FFE8EAED"/>
+      <Setter Property="BorderBrush" Value="#FF3D4450"/>
+      <Setter Property="RowBackground" Value="#FF1B1E24"/>
+      <Setter Property="AlternatingRowBackground" Value="#FF22262E"/>
+      <Setter Property="HorizontalGridLinesBrush" Value="#FF2A3038"/>
+      <Setter Property="VerticalGridLinesBrush" Value="#FF2A3038"/>
+      <Setter Property="HeadersVisibility" Value="Column"/>
+      <Setter Property="AutoGenerateColumns" Value="False"/>
+      <Setter Property="IsReadOnly" Value="True"/>
+      <Setter Property="SelectionMode" Value="Extended"/>
+      <Setter Property="CanUserAddRows" Value="False"/>
+      <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+    </Style>
+    <Style TargetType="DataGridColumnHeader">
+      <Setter Property="Background" Value="#FF2D333B"/>
+      <Setter Property="Foreground" Value="#FFB0B8C4"/>
+      <Setter Property="Padding" Value="8,6"/>
+      <Setter Property="BorderBrush" Value="#FF3D4450"/>
+      <Setter Property="BorderThickness" Value="0,0,1,1"/>
+    </Style>
+    <Style TargetType="DataGridCell">
+      <Setter Property="Padding" Value="6,4"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Style.Triggers>
+        <Trigger Property="IsSelected" Value="True">
+          <Setter Property="Background" Value="#FF3A4A5C"/>
+          <Setter Property="Foreground" Value="#FFE8EAED"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+  </Window.Resources>
+
+  <DockPanel Margin="16">
+    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12" LastChildFill="False">
+      <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+        <Button x:Name="BtnRefresh" Content="Обновить список" Click="BtnRefresh_Click"/>
+        <Button x:Name="BtnStartSelected" Content="Старт выбранных" Click="BtnStartSelected_Click"/>
+        <Button x:Name="BtnStartAll" Content="Старт всех" Click="BtnStartAll_Click"/>
+        <Button x:Name="BtnStopSelected" Content="Стоп выбранных" Click="BtnStopSelected_Click"/>
+        <Button x:Name="BtnStopAll" Content="Стоп всех" Click="BtnStopAll_Click"/>
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+        <TextBlock Text="воркеров:" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="#FFB0B8C4"/>
+        <TextBox x:Name="TxtMaxParallel" Width="48" Text="8" VerticalAlignment="Center"/>
+        <TextBlock x:Name="TxtSummary" Margin="16,0,0,0" VerticalAlignment="Center" Foreground="#FF8AB4F8"/>
+      </StackPanel>
+    </DockPanel>
+
+    <TextBlock DockPanel.Dock="Top" Margin="0,0,0,8" TextWrapping="Wrap" Foreground="#FF8A9099"
+               Text="«Старт всех»: до 8 воркеров делят все тикеры (round-robin, --watch-only), внутри шарда fair-очередь. Больше 8 — thrash: CPU есть, CSV почти не обновляются. Один export_net ≈ 1–2 мин. Не потоки — процессы python+numpy."/>
+
+    <TextBox x:Name="TxtLog" DockPanel.Dock="Bottom" Height="140" Margin="0,12,0,0"
+             IsReadOnly="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="11"
+             TextWrapping="Wrap"/>
+
+    <DataGrid x:Name="Grid" ItemsSource="{Binding}">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="Sec" Binding="{Binding Sec}" Width="90"/>
+        <DataGridTextColumn Header="Class" Binding="{Binding ClassCode}" Width="70"/>
+        <DataGridTextColumn Header="Воркер" Binding="{Binding WorkerLabel}" Width="70"/>
+        <DataGridTextColumn Header="Статус" Binding="{Binding Status}" Width="90"/>
+        <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="70"/>
+        <DataGridTextColumn Header="Последнее обновление" Binding="{Binding LastText}" Width="140"/>
+        <DataGridTextColumn Header="Возраст" Binding="{Binding AgeText}" Width="90"/>
+        <DataGridTextColumn Header="До обновления" Binding="{Binding EtaText}" Width="140"/>
+        <DataGridTextColumn Header="Деталь" Binding="{Binding Detail}" Width="*"/>
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</Window>

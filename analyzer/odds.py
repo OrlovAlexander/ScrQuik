@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """Odds overlay evolved into --net / *AnalyzerNet. Do not extend --odds.
 
-Lead TF down to M1 (not pair bundles). Pair bundles are связкаД1Н4 /
-связкаН4М30 / связкаМ30М10. Shared helpers (forming bars from M1,
-tf_numeric) are used by net and pack-ahead.
+Lead TF down to M1 (not pair bundles). Pair bundles are связкаМ1М10 /
+связкаМ5М10 / связкаМ10М20, chain window 5. Shared helpers (forming
+bars from M1, tf_numeric) are used by net and pack-ahead.
 
 Live кадр (archive): forming bars from the leading TF down to M1 (plus D1).
 """
@@ -38,12 +38,13 @@ from analyzer.states import (
 
 ODDS_DEAD_END = True  # overlay superseded by --net; keep helpers
 ODDS_LEAD_TFS = ("M10", "M30", "H4")
-# Pair bundles for pattern search (not the --odds overlay frame).
-BUNDLE_PAIRS = (("D1", "H4"), ("H4", "M30"), ("M30", "M10"))
+# Pair bundles for pattern search and shares (not the --odds overlay frame).
+# Tuple is (senior, junior); name is junior then senior.
+BUNDLE_PAIRS = (("M10", "M1"), ("M10", "M5"), ("M20", "M10"))
 BUNDLE_NAMES = {
-    ("D1", "H4"): "связкаД1Н4",
-    ("H4", "M30"): "связкаН4М30",
-    ("M30", "M10"): "связкаМ30М10",
+    ("M10", "M1"): "связкаМ1М10",
+    ("M10", "M5"): "связкаМ5М10",
+    ("M20", "M10"): "связкаМ10М20",
 }
 # Overlay CSV still keyed by chart TF. Pattern object is BUNDLE_PAIRS.
 ODDS_FRAME_TFS = {
@@ -56,8 +57,8 @@ ODDS_MAX_BARS = {"M1": 6000, "M10": 2000, "M30": 2000, "H4": 2000, "D1": 800}
 ODDS_DIR = Path(r"C:\QuikFinam\LuaIndicators\analyzer_odds")
 DT_FMT = "%d.%m.%Y %H:%M:%S"
 SIM_MIN = 0.60
-CHAIN_WINDOW = {"M1": 3, "M10": 3, "M30": 3, "H4": 3, "D1": 3}
-CHAIN_BARS = 3
+CHAIN_WINDOW = {"M1": 5, "M5": 5, "M10": 5, "M20": 5, "M30": 5, "H4": 5, "D1": 5}
+CHAIN_BARS = 5
 FLAT_PCT = 0.3
 FLAT_FRAC = 0.25
 MIN_PACK_TAGS = 5

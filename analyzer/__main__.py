@@ -11,6 +11,7 @@ from analyzer.marks import export_all_marks, export_marks, format_marks, watch_m
 from analyzer.odds import export_all_odds, export_odds, format_odds, watch_odds
 from analyzer.pack_ahead import format_pack_ahead, pack_ahead
 from analyzer.net import export_all_net, export_net, format_net, train_net, watch_net
+from analyzer.watch_pool import parse_watch_only, watch_net_pool
 from analyzer.waves import export_waves, format_waves, watch_waves
 
 
@@ -43,9 +44,26 @@ def main() -> None:
     p.add_argument("--odds", action="store_true", help="Archive: old lead→M1 odds CSV; evolved into --net, do not extend")
     p.add_argument("--watch-odds", action="store_true", help="Archive: live old lead→M1 odds; evolved into --watch-net")
     p.add_argument("--pack-ahead", action="store_true", help="Similar forming D1 pack on D1/H4/M30; next-day D1 close (no chain)")
-    p.add_argument("--train-net", action="store_true", help="Train the pair-bundle MLP on all (or one) instruments")
+    p.add_argument("--train-net", action="store_true", help="Train the связкаМ1М5М10М20 MLP on all (or one) instruments")
     p.add_argument("--net", action="store_true", help="Write *AnalyzerNet CSV (regime + buy/sell in/out) from the trained net")
     p.add_argument("--watch-net", action="store_true", help="Live net overlay: recalc on M1 ticks and M10/M30/H4 closes")
+    p.add_argument(
+        "--watch-net-pool",
+        action="store_true",
+        help="Spawn --watch-net in a separate process per instrument (or --jobs shards)",
+    )
+    p.add_argument(
+        "--jobs",
+        type=int,
+        default=None,
+        metavar="N",
+        help="--watch-net-pool workers; omit = CPU count max 8; 0 = one process per instrument",
+    )
+    p.add_argument(
+        "--watch-only",
+        default=None,
+        help="Restrict --watch-net to SEC:CLASS,... (pool workers)",
+    )
     p.add_argument("--watch", action="store_true", help="Keep re-exporting marks when barsSaver CSV grows")
     p.add_argument("--poll", type=float, default=11.0, help="Idle seconds between barsSaver checks in --watch")
     args = p.parse_args()
@@ -59,7 +77,8 @@ def main() -> None:
         or args.watch_odds
         or args.train_net
         or args.net
-        or args.watch_net,
+        or args.watch_net
+        or args.watch_net_pool,
     )
     if args.watch_waves:
         if args.json:
@@ -78,11 +97,33 @@ def main() -> None:
         except KeyboardInterrupt:
             print("watch-odds stopped", flush=True)
         return
+    if args.jobs is not None and not args.watch_net_pool:
+        p.error("--jobs is only for --watch-net-pool")
+    if args.watch_only and not args.watch_net:
+        p.error("--watch-only is for --watch-net workers")
+    if args.watch_net_pool:
+        if args.json:
+            p.error("--json cannot be used with --watch-net-pool")
+        if args.watch_net:
+            p.error("use --watch-net-pool or --watch-net, not both")
+        if args.sec:
+            p.error("--watch-net-pool runs every instrument; for one ticker use --watch-net --sec")
+        if args.watch_only:
+            p.error("--watch-only is for --watch-net workers, not --watch-net-pool")
+        jobs = args.jobs
+        try:
+            watch_net_pool(cls, poll=args.poll, jobs=jobs)
+        except KeyboardInterrupt:
+            print("watch-net-pool stopped", flush=True)
+        return
     if args.watch_net:
         if args.json:
             p.error("--json cannot be used with --watch-net")
+        only = parse_watch_only(args.watch_only)
+        if only and args.sec:
+            p.error("use --watch-only or --sec, not both")
         try:
-            watch_net(args.sec, cls, poll=args.poll)
+            watch_net(args.sec, cls, poll=args.poll, only=only)
         except KeyboardInterrupt:
             print("watch-net stopped", flush=True)
         return

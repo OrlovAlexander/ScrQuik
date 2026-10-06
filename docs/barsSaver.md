@@ -1,8 +1,6 @@
 # barsSaver в этом проекте
 
-Скрипт не входит в репозиторий. Исходник: [nick-nh/qlua/barsSaver](https://github.com/nick-nh/qlua/tree/master/barsSaver), описание автора: [nick-nh.github.io](https://nick-nh.github.io/2021-11-24/barsSaver-post). Код `barsSaver.lua` **не патчили**: отличие от апстрима — установка, список инструментов и режим работы.
-
-Живая копия:
+Скрипт не входит в корень репозитория как рабочая копия QUIK. Исходник апстрима: [nick-nh/qlua/barsSaver](https://github.com/nick-nh/qlua/tree/master/barsSaver), описание автора: [nick-nh.github.io](https://nick-nh.github.io/2021-11-24/barsSaver-post). Рабочая копия и патч надёжности — в `srcGitHub/qlua/barsSaver/` и в QUIK:
 
 ```text
 C:\QuikFinam\LuaScripts\barsSaver\
@@ -18,6 +16,21 @@ C:\QuikFinam\LuaScripts\barsSaver\
 Это **Lua-скрипт** (Сервисы → Lua-скрипты), не индикатор. `log.lua` и `maLib.lua` обязательны даже без EMA/MACD в списке.
 
 ## Что изменено относительно апстрима
+
+### Надёжность datasource (патч)
+
+После `OnDisconnected` апстрим оставлял старые `CreateDataSource`: M1 одного тикера мог замереть, а M10 того же тикера — писаться дальше. Метки/сеть на M1 стояли на последнем сохранённом баре.
+
+Патч в `barsSaver.lua`:
+
+| что | зачем |
+|---|---|
+| `OnDisconnected` → закрыть все DS, `NEED_DS_REBUILD` | не держать мёртвые источники |
+| `OnConnected` → `NEED_DS_REBUILD` | после reconnect пересоздать functors и DS |
+| `CheckStaleDataSources` | если M1 отстаёт от M10 того же тикера > `STALE_M1_BEHIND_M10_SEC` (120 с) — пересоздать |
+| `DS_REBUILD_COOLDOWN_SEC` (30) | не крутить rebuild в цикле |
+
+В логе ищите `RebuildDataFunctors` / `stale M1 DS behind M10`. После правки lua/ini — **перезапустить** barsSaver.
 
 ### `sec_list.txt`
 
@@ -48,14 +61,12 @@ C:\QuikFinam\LuaScripts\barsSaver\
 | `str_endOfDay` | `23:50:00` | не резать день в 19:00 |
 | `SERVER_DATA_CYCLE_TIME` | `-1` | не ждать «время сервера» (иначе простой после reconnect) |
 | `MAX_LOCAL_TO_SERVER_TIME_DIFF` | `-1` | не стопорить из-за часов |
+| `STALE_M1_BEHIND_M10_SEC` | `120` | порог отставания M1 от M10 → rebuild DS |
+| `DS_REBUILD_COOLDOWN_SEC` | `30` | пауза между rebuild |
 
 Строка в CSV появляется, когда у бара **новое время** (закрылась предыдущая свеча). Тики текущей свечи в файл не попадают.
 
 Имя файла фьючерса без точки в коде обрезается (`CRZ6` → `CR`) — так устроен апстрим, не наша правка.
-
-## Сбой после disconnect
-
-После `OnDisconnected` datasource M1 одного тикера может перестать расти, а M10 того же тикера — писаться дальше. Тогда метки M1 стоят на последнем сохранённом баре, хотя график QUIK уже ушёл вперёд. Лечится **перезапуском barsSaver**.
 
 ## Как добавить инструмент
 

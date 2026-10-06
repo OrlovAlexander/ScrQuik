@@ -1,9 +1,10 @@
 -- Separate window for python -m analyzer --net / --watch-net
 -- CSV: LuaIndicators\analyzer_net\{SEC}_{CLASS}_{TF}.csv
 -- Add as a NEW pane (not on price).
--- Impulse / pullback / uncertain / rail 100 are not drawn.
--- Dashed ahead_up / ahead_down / ahead_flat = mean of three ahead heads.
--- buy_in / sell_in at 33 = that same mean (M10/M30 CSV only).
+-- Impulse / pullback / regime flat / uncertain / rail 100 are not drawn.
+-- Dashed ahead_up / ahead_down / ahead_flat = mean of ahead heads.
+-- Do not stretch mix past the last CSV bar (live edge without rows stays empty).
+-- buy_in / sell_in at 33 = M10 ahead head after mix agreement and impulse veto.
 -- Re-add after lua replace.
 
 local RGB           = _G['RGB']
@@ -16,7 +17,6 @@ local isDark        = _G.isDarkTheme and _G.isDarkTheme()
 local message       = _G['message']
 
 local palette = isDark and {
-    flat      = RGB(80, 170, 255),
     rail      = RGB(90, 90, 90),
     buy_in    = RGB(80, 255, 160),
     sell_in   = RGB(255, 90, 90),
@@ -24,7 +24,6 @@ local palette = isDark and {
     ahead_down= RGB(255, 90, 160),
     ahead_flat= RGB(190, 170, 255),
 } or {
-    flat      = RGB(20, 90, 210),
     rail      = RGB(160, 160, 160),
     buy_in    = RGB(0, 140, 70),
     sell_in   = RGB(210, 30, 30),
@@ -39,10 +38,9 @@ _G.Settings = {
     ReloadSec   = 15,
     ReadTries   = 2,
     ReadRetryMs = 0,
-    MinAction   = 45,
-    ActionGap   = 8,
+    MinAction   = 52,
+    ActionGap   = 10,
     line = {
-        { Name = "flat",      Color = palette.flat,      Type = TYPE_LINE,      Width = 2 },
         { Name = "0",         Color = palette.rail,      Type = TYPE_DASH,      Width = 1 },
         { Name = "buy_in",    Color = palette.buy_in,    Type = TYPE_POINT,     Width = 4 },
         { Name = "sell_in",   Color = palette.sell_in,   Type = TYPE_POINT,     Width = 4 },
@@ -115,6 +113,8 @@ local function netDir()
     return _G.getWorkingFolder().."\\LuaIndicators\\analyzer_net"
 end
 
+local peekLastLine, csvStamp
+
 local function netPath()
     local ds = _G.getDataSourceInfo and _G.getDataSourceInfo() or {}
     local sec = ds.sec_code or "NA"
@@ -137,6 +137,7 @@ local function netPath()
         classes[#classes + 1] = "SPBFUT"
     end
     local seen = {}
+    local bestPath, bestDt = nil, ""
     for i = 1, #names do
         if names[i] ~= nil and names[i] ~= "" and not seen[names[i]] then
             seen[names[i]] = true
@@ -145,12 +146,15 @@ local function netPath()
                 local fh = io.open(path, "r")
                 if fh ~= nil then
                     fh:close()
-                    return path
+                    local dt = csvStamp(path)
+                    if bestPath == nil or dt > bestDt then
+                        bestPath, bestDt = path, dt
+                    end
                 end
             end
         end
     end
-    return dir.."\\"..sec.."_"..cls.."_"..tf..".csv"
+    return bestPath or (dir.."\\"..sec.."_"..cls.."_"..tf..".csv")
 end
 
 local function normKey(dt)
@@ -186,7 +190,30 @@ local function barKey(index)
     )
 end
 
-local function peekLastLine(path)
+local function keyStamp(dt)
+    if dt == nil then
+        return nil
+    end
+    local d, m, y, h, mi = string.match(dt, "^(%d%d)%.(%d%d)%.(%d%d%d%d) (%d%d):(%d%d)")
+    if y == nil then
+        return nil
+    end
+    return y .. m .. d .. h .. mi
+end
+
+local function aheadOnBar(index, row, lastDt, lastUp, lastDown, lastFlat)
+    if row ~= nil then
+        return row.ahead_up, row.ahead_down, row.ahead_flat
+    end
+    local lastStamp = keyStamp(lastDt)
+    local stamp = keyStamp(barKey(index))
+    if lastStamp ~= nil and stamp ~= nil and stamp <= lastStamp then
+        return lastUp, lastDown, lastFlat
+    end
+    return nil, nil, nil
+end
+
+peekLastLine = function(path)
     local fh = io.open(path, "rb")
     if fh == nil then
         return nil
@@ -208,6 +235,18 @@ local function peekLastLine(path)
         last = line
     end
     return last
+end
+
+csvStamp = function(path)
+    local line = peekLastLine(path)
+    if line == nil then
+        return ""
+    end
+    local d, mo, y, h, mi = string.match(line, "^(%d%d)%.(%d%d)%.(%d%d%d%d) (%d%d):(%d%d)")
+    if d == nil then
+        return ""
+    end
+    return string.format("%s%s%s%s%s", y, mo, d, h, mi)
 end
 
 local function loadNet(path)
@@ -276,11 +315,11 @@ local function actionPoint(row)
         return nil, nil
     end
     local tf = chartTfTag()
-    if tf ~= "M10" and tf ~= "M30" then
+    if tf ~= "M10" then
         return nil, nil
     end
-    local minA = tonumber(_G.Settings.MinAction) or 45
-    local gap = tonumber(_G.Settings.ActionGap) or 8
+    local minA = tonumber(_G.Settings.MinAction) or 52
+    local gap = tonumber(_G.Settings.ActionGap) or 10
     local action = row.action
     local function strong(p, other)
         p = tonumber(p) or 0
@@ -296,30 +335,28 @@ local function actionPoint(row)
     return nil, nil
 end
 
-local function paintAll(byKey)
+local function paintAll(byKey, lastDt)
     if SetValue == nil or _G.Size == nil then
         return
     end
     local n = _G.Size()
-    local lastFlat = nil
     local lastAheadUp, lastAheadDown, lastAheadFlat = nil, nil, nil
     for i = 1, n do
         local row = rowFor(i, byKey)
         if row ~= nil then
-            lastFlat = row.flat
             lastAheadUp, lastAheadDown, lastAheadFlat = row.ahead_up, row.ahead_down, row.ahead_flat
         end
         local buy_in, sell_in = nil, nil
         if row ~= nil then
             buy_in, sell_in = actionPoint(row)
         end
-        SetValue(i, 1, lastFlat)
-        SetValue(i, 2, 0)
-        SetValue(i, 3, buy_in)
-        SetValue(i, 4, sell_in)
-        SetValue(i, 5, lastAheadUp)
-        SetValue(i, 6, lastAheadDown)
-        SetValue(i, 7, lastAheadFlat)
+        local up, down, flat = aheadOnBar(i, row, lastDt, lastAheadUp, lastAheadDown, lastAheadFlat)
+        SetValue(i, 1, 0)
+        SetValue(i, 2, buy_in)
+        SetValue(i, 3, sell_in)
+        SetValue(i, 4, up)
+        SetValue(i, 5, down)
+        SetValue(i, 6, flat)
     end
 end
 
@@ -329,7 +366,6 @@ local function Algo()
     local loadedTail = ""
     local lastCheck = 0
     local prevSize = 0
-    local lastFlat = nil
     local lastAheadUp, lastAheadDown, lastAheadFlat = nil, nil, nil
 
     local function refresh()
@@ -351,19 +387,18 @@ local function Algo()
                 warnedTf = true
                 message("*AnalyzerNet: M1, M10, M30, H4 or D1", 1)
             end
-            return nil, nil, nil, nil, nil, nil, nil
+            return nil, nil, nil, nil, nil, nil
         end
         if index == 1 or loadedLast == "" then
-            lastFlat = nil
             lastAheadUp, lastAheadDown, lastAheadFlat = nil, nil, nil
             refresh()
-            paintAll(byKey)
+            paintAll(byKey, loadedLast)
             prevSize = _G.Size and _G.Size() or 0
         end
         local nBars = _G.Size and _G.Size() or 0
         if index == nBars and nBars > 0 then
             if prevSize ~= nBars then
-                paintAll(byKey)
+                paintAll(byKey, loadedLast)
                 prevSize = nBars
             end
             local now = os_time()
@@ -375,28 +410,30 @@ local function Algo()
                 local tail = peekLastLine(path)
                 if tail ~= nil and tail ~= loadedTail then
                     if refresh() then
-                        paintAll(byKey)
+                        paintAll(byKey, loadedLast)
                     end
                 end
             end
         end
         local row = rowFor(index, byKey)
         if row ~= nil then
-            lastFlat = row.flat
             lastAheadUp, lastAheadDown, lastAheadFlat = row.ahead_up, row.ahead_down, row.ahead_flat
         end
         local buy_in, sell_in = nil, nil
         if row ~= nil then
             buy_in, sell_in = actionPoint(row)
         end
-        return lastFlat, 0, buy_in, sell_in, lastAheadUp, lastAheadDown, lastAheadFlat
+        local up, down, flat = aheadOnBar(
+            index, row, loadedLast, lastAheadUp, lastAheadDown, lastAheadFlat
+        )
+        return 0, buy_in, sell_in, up, down, flat
     end
 end
 
 function _G.Init()
     warnedTf = false
     PlotLines = Algo()
-    return 7
+    return 6
 end
 
 function _G.OnChangeSettings()

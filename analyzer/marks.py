@@ -16,10 +16,22 @@ MARKS_CORE_TFS = ("M1", "M10", "M30", "H4")
 MARKS_TFS = MARKS_CORE_TFS + ("D1",)
 MARKS_MAX_BARS = {"M1": 6000, "M10": 2000, "M30": 2000, "H4": 2000, "D1": 800}
 DT_FMT = "%d.%m.%Y %H:%M:%S"
-SETUP_CODE = {"none": 0, "buy": 1, "sell": 2, "buy1": 3, "sell1": 4, "buy2": 5, "sell2": 6}
+SETUP_CODE = {
+    "none": 0,
+    "buy": 1,
+    "sell": 2,
+    "buy1": 3,
+    "sell1": 4,
+    "buy2": 5,
+    "sell2": 6,
+    "buy3": 7,
+    "sell3": 8,
+}
 _WRITE_TRIES = 6
 _WRITE_WAIT = 0.12
 DIRTY_BUDGET_SEC = 21.0
+# Never-exported instruments sort before any that already ran this session.
+_NEVER_EXPORTED = -1.0
 
 
 def format_mark_dt(dt: datetime) -> str:
@@ -93,6 +105,8 @@ def count_marks(rows: list[dict]) -> dict:
         "sell1": 0,
         "buy2": 0,
         "sell2": 0,
+        "buy3": 0,
+        "sell3": 0,
         "none": 0,
     }
     for row in rows:
@@ -165,7 +179,7 @@ def format_marks(report: dict, compact: bool = False) -> str:
         lines.append(
             f"  {tf}: bars={pack['bars']} onset={pack['onset']} "
             f"buy={pack['buy']} sell={pack['sell']} buy1={pack['buy1']} sell1={pack['sell1']} "
-            f"buy2={pack['buy2']} sell2={pack['sell2']}"
+            f"buy2={pack['buy2']} sell2={pack['sell2']} buy3={pack.get('buy3', 0)} sell3={pack.get('sell3', 0)}"
         )
         lines.append(f"       {report['files'][tf]}")
     return "\n".join(lines)
@@ -232,10 +246,18 @@ def watch_marks(
     formatter: Callable[..., str] | None = None,
     label: str = "marks",
     export_tfs: Callable[[tuple[str, ...]], tuple[str, ...]] | None = None,
+    only: list[tuple[str, str]] | None = None,
+    dirty_budget: float | None = None,
+    max_exports: int | None = None,
 ) -> int:
-    """Re-export marks whenever barsSaver CSV files grow. Returns export count."""
+    """Re-export marks whenever barsSaver CSV files grow. Returns export count.
+
+    Dirty jobs are ordered by least-recent export so one hot instrument cannot
+    starve the rest of a pool shard (fair queue).
+    """
     wait = max(1.0, float(poll))
-    budget = max(wait, DIRTY_BUDGET_SEC)
+    budget = max(wait, float(dirty_budget) if dirty_budget is not None else DIRTY_BUDGET_SEC)
+    cap = None if max_exports is None else max(1, int(max_exports))
     run = exporter or export_marks
     emit = log or (lambda msg: print(msg, flush=True))
     fmt = formatter or format_marks
@@ -243,8 +265,15 @@ def watch_marks(
     bars_root = data_dir or BARS_DIR
     dest = dest_dir or MARKS_DIR
     scope = sec or f"* {class_code or 'ALL'}"
-    emit(f"watch {scope}  poll={wait:.0f}s  budget={budget:.0f}s  bars={bars_root}  {label}={dest}")
+    if only:
+        scope = ",".join(f"{name}:{cls}" for name, cls in only)
+    emit(
+        f"watch {scope}  poll={wait:.0f}s  budget={budget:.0f}s"
+        f"{'' if cap is None else f'  max={cap}'}"
+        f"  bars={bars_root}  {label}={dest}"
+    )
     last: dict[tuple[str, str, str], tuple] = {}
+    last_export: dict[tuple[str, str], float] = {}
     exports = 0
     cycle = 0
     while not (stop and stop()):
@@ -252,7 +281,9 @@ def watch_marks(
         t0 = time.monotonic()
         stamp = datetime.now().strftime("%H:%M:%S")
         try:
-            if sec:
+            if only:
+                universe = list(only)
+            elif sec:
                 universe = [(sec, class_code or "TQBR")]
             else:
                 list_tfs = MARKS_CORE_TFS if chosen == MARKS_TFS else chosen
@@ -287,11 +318,23 @@ def watch_marks(
                     items = grouped[(name, cls)]
                     seen = tuple(tf for tf, _ in items)
                     jobs.append((name, cls, export_tfs(seen), items))
+            ranked = list(enumerate(jobs))
+            ranked.sort(
+                key=lambda pair: (
+                    last_export.get((pair[1][0], pair[1][1]), _NEVER_EXPORTED),
+                    pair[0],
+                )
+            )
+            jobs = [job for _, job in ranked]
             done = 0
             for name, cls, tfs_arg, items in jobs:
                 if done and (time.monotonic() - t0) >= budget:
                     left = len(jobs) - done
                     emit(f"{stamp}  defer {left}  next poll")
+                    break
+                if cap is not None and done >= cap:
+                    left = len(jobs) - done
+                    emit(f"{stamp}  defer {left}  next poll (max={cap})")
                     break
                 try:
                     if export_tfs is not None:
@@ -305,15 +348,23 @@ def watch_marks(
                     )
                     report["exported_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     emit(fmt(report, compact=True))
+                    last_export[(name, cls)] = time.monotonic()
+                    done += 1
+                    if report.get("error"):
+                        # Keep dirty fingerprints so a later poll retries; rotate past it.
+                        exports += 1
+                        continue
                     for tf, fp in items:
                         last[(name, cls, tf)] = fp
                     exports += 1
-                    done += 1
                 except FileNotFoundError as exc:
                     for tf, fp in items:
                         last[(name, cls, tf)] = fp
+                    last_export[(name, cls)] = time.monotonic()
                     emit(f"watch wait {name} {items[0][0]}: {exc}")
                 except Exception as exc:
+                    # Rotate past a sticky failure so one ticker cannot block the shard.
+                    last_export[(name, cls)] = time.monotonic()
                     emit(f"watch error {name} {items[0][0]}: {exc}")
         except KeyboardInterrupt:
             emit("watch stopped")

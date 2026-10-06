@@ -25,6 +25,7 @@ alwaysApply: true
   - M30: `[RPM_TF_Up_5.M30]` — H1 / H2 / H4
   - H4: `[RPM_TF_Up_5.H4]` — H12 / D1 / W1
   - D1: `[RPM_TF_Up_5.D1]` — D5 / W2 / W5
+  - сеть, без графика QUIK: `[RPM_TF_Up_5.M5]` — Mn10 / Mn20 / Mn30; `[RPM_TF_Up_5.M20]` — Mn30 / H1 / H2
 - Слои Small / Middle / Up в секции — старшие ТФ относительно графика. Не подставлять дефолты из `RPM_TF_Up_5.lua`.
 
 ## RPM-current

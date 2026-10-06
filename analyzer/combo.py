@@ -20,9 +20,9 @@ MIN_MOVE_PCT = 1.0
 M30_MOVE_PCT = 3.0
 M30_SHOW_LAST = 20
 SETUP_LOOKBACK = {"M1": 100, "M10": 50}
-SETUP_NAMES = frozenset({"buy", "sell", "buy1", "sell1", "buy2", "sell2"})
-WARMUP = {"M1": 200, "M10": 120, "M30": 80, "H4": 60, "D1": 80}
-PERIOD_MIN = {"M1": 1, "M10": 10, "M30": 30, "H4": 240, "D1": 1440}
+SETUP_NAMES = frozenset({"buy", "sell", "buy1", "sell1", "buy2", "sell2", "buy3", "sell3"})
+WARMUP = {"M1": 200, "M5": 150, "M10": 120, "M20": 100, "M25": 100, "M30": 80, "H1": 70, "H4": 60, "D1": 80}
+PERIOD_MIN = {"M1": 1, "M5": 5, "M10": 10, "M20": 20, "M25": 25, "M30": 30, "H1": 60, "H4": 240, "D1": 1440}
 
 
 def _tags_match(pack: dict | None, **expect) -> bool:
@@ -177,6 +177,66 @@ def _sell2_stack(small: dict, middle: dict, hist: dict, current: dict | None = N
     )
 
 
+def _buy3_turn(small: dict, middle: dict, hist: dict, current: dict | None = None) -> bool:
+    """CNY M10 2026-10-05 20:30 / M30 18:30–19:00: current already above 0, rising
+    from below or at EMA; hist above 0 shrinking. No point when current is above EMA.
+    """
+    return (
+        _tags_match(
+            current,
+            vs0="above_0",
+            vs_ema=("below_ema", "near_ema"),
+            slope="rising_below_ema",
+            ema_vs0="above_0",
+            ema_trend="falling",
+        )
+        and _tags_match(small, vs0="above_0")
+        and _tags_match(middle, vs0="above_0")
+        and _tags_match(hist, hist_sign="above_0", hist_dir="hist_shrinking")
+    )
+
+
+def _buy3_stack(small: dict, middle: dict, hist: dict, current: dict | None = None) -> bool:
+    """Continuation after a V: turn from below/near EMA only (not when above EMA)."""
+    return _buy3_turn(small, middle, hist, current)
+
+
+def _sell3_turn(small: dict, middle: dict, hist: dict, current: dict | None = None) -> bool:
+    """Mirror of _buy3_turn. No point when current is below EMA."""
+    return (
+        _tags_match(
+            current,
+            vs0="below_0",
+            vs_ema=("above_ema", "near_ema"),
+            slope="falling_above_ema",
+            ema_vs0="below_0",
+            ema_trend="rising",
+        )
+        and _tags_match(small, vs0="below_0")
+        and _tags_match(middle, vs0="below_0")
+        and _tags_match(hist, hist_sign="below_0", hist_dir="hist_shrinking")
+    )
+
+
+def _sell3_stack(small: dict, middle: dict, hist: dict, current: dict | None = None) -> bool:
+    """Mirror of _buy3_stack."""
+    return _sell3_turn(small, middle, hist, current)
+
+
+def _current_allows_buy(current: dict | None) -> bool:
+    """No buy variant when current RPM is above its EMA."""
+    if current is None:
+        return False
+    return current.get("vs_ema") != "above_ema"
+
+
+def _current_allows_sell(current: dict | None) -> bool:
+    """No sell variant when current RPM is below its EMA."""
+    if current is None:
+        return False
+    return current.get("vs_ema") != "below_ema"
+
+
 def _sell_m10_cross(current: dict | None, small: dict, middle: dict, hist: dict) -> bool:
     """Mirror of _buy_m10_cross."""
     return (
@@ -207,19 +267,27 @@ def setup_signal(
     hist: dict,
     current: dict | None = None,
 ) -> str:
-    """Classic stack = buy/sell. M10 17:20 = buy1/sell1. Si M1 18:55 = buy2/sell2."""
-    if _buy_stack(small, middle, hist, current):
+    """Classic stack = buy/sell. M10 17:20 = buy1/sell1. Si M1 18:55 = buy2/sell2.
+    CNY M10 20:30 / M30 18:30–19:00 = buy3/sell3 turn (not when current is past EMA).
+    """
+    allow_buy = _current_allows_buy(current)
+    allow_sell = _current_allows_sell(current)
+    if allow_buy and _buy_stack(small, middle, hist, current):
         return "buy"
-    if _sell_stack(small, middle, hist, current):
+    if allow_sell and _sell_stack(small, middle, hist, current):
         return "sell"
-    if _buy_m10_cross(current, small, middle, hist):
+    if allow_buy and _buy_m10_cross(current, small, middle, hist):
         return "buy1"
-    if _sell_m10_cross(current, small, middle, hist):
+    if allow_sell and _sell_m10_cross(current, small, middle, hist):
         return "sell1"
-    if _buy2_stack(small, middle, hist, current):
+    if allow_buy and _buy2_stack(small, middle, hist, current):
         return "buy2"
-    if _sell2_stack(small, middle, hist, current):
+    if allow_sell and _sell2_stack(small, middle, hist, current):
         return "sell2"
+    if allow_buy and _buy3_stack(small, middle, hist, current):
+        return "buy3"
+    if allow_sell and _sell3_stack(small, middle, hist, current):
+        return "sell3"
     return "none"
 
 
@@ -360,6 +428,10 @@ def _child(node: dict, key: str) -> dict:
 
 
 def _setup_of(key: str) -> str:
+    if key.startswith("buy3|"):
+        return "buy3"
+    if key.startswith("sell3|"):
+        return "sell3"
     if key.startswith("buy2|"):
         return "buy2"
     if key.startswith("sell2|"):
@@ -598,10 +670,10 @@ def setup_drawdown(bars: list[Bar], onset_i: int, end_i: int, setup: str) -> flo
     if px <= 0:
         return None
     chunk = bars[onset_i : end_i + 1]
-    if setup in {"buy", "buy1", "buy2"}:
+    if setup in {"buy", "buy1", "buy2", "buy3"}:
         worst = min(b.l for b in chunk)
         return round((px - worst) / px * 100.0, 3)
-    if setup in {"sell", "sell1", "sell2"}:
+    if setup in {"sell", "sell1", "sell2", "sell3"}:
         worst = max(b.h for b in chunk)
         return round((worst - px) / px * 100.0, 3)
     return None

@@ -22,15 +22,17 @@ Python считает те же линии, что Lua на графике QUIK.
 | `analyzer/one2one.py` | **архив:** 121 на M30; рудимент, не развивать |
 | `analyzer/neighbors.py` | закрытый бар младшего ТФ на момент старшего |
 | `analyzer/states.py` | теги vs0 / vs_ema / slope / ema_vs0 / ema_slope / ema_trend / hist |
-| `analyzer/combo.py` | сетапы buy/sell/buy1/sell1/buy2/sell2, дерево состояний |
+| `analyzer/combo.py` | сетапы buy/sell/buy1/sell1/buy2/sell2/buy3/sell3, дерево состояний |
 | `analyzer/price.py` | классификация хода цены |
 | `analyzer/snapshot.py` | снимок одного инструмента на M1/M10/M30/H4 (D1 — только метки `--watch` / `--marks`) |
 | `analyzer/marks.py` | CSV меток M1/M10/M30/H4/D1 и `--watch` |
 | `analyzer/waves.py` | **архив:** зигзаг и волны 1–5; CSV для `*AnalyzerZigZag`; рудимент, не развивать |
 | `analyzer/odds.py` | архив `--odds` (ведущий→M1), эволюционировал в `--net`; хелперы для net и pack-ahead |
 | `analyzer/pack_ahead.py` | похожая пачка формирующегося D1 на D1/H4/M30; исход — следующее закрытие D1 справа (без цепочки) |
-| `analyzer/net.py` | MLP: ствол общий, без `Wa`; точка — среднее трёх ahead; ahead — три головы (10/30/240 M1) |
-| `analyzer/tf_from_m1.py` | закрытые слоты M10/M30/H4/D1 из M1; формирующийся бар на минуту `t`; CSV — сверка на закрытии |
+| `analyzer/patterns.py` | парные связки связкаМ1М10 / связкаМ5М10 / связкаМ10М20, цепочка 5, доли аналогов для `--train-net` |
+| `analyzer/net.py` | MLP: ствол общий, без `Wa`; кадр 2+2+2+1 плюс доли трёх пар; точка только M10 — голова 10 M1 + вето импульса; ahead — четыре головы (1/5/10/20 M1) |
+| `analyzer/watch_pool.py` | `--watch-net-pool`: шарды `--watch-net` / `--watch-only`; `JOBS_CAP=8` (и auto, и явный `--jobs N>0`); fair + `max_exports=1` внутри воркера |
+| `analyzer/tf_from_m1.py` | закрытые слоты M5/M10/M20/M30/H4/D1 из M1; формирующийся бар на минуту `t`; CSV старших графиков — сверка на закрытии |
 | `analyzer/__main__.py` | CLI |
 
 Пороги тегов (доля медианы модуля ряда): `NEAR_ZERO=0.25`, `NEAR_EMA=0.15`, `NEAR_SLOPE=0.08`, `NEAR_HIST=0.15`. Тренд EMA — за 5 баров.
@@ -51,17 +53,18 @@ D2–D5 и W2–W5 режутся **как в Lua**: unix-день `floor(os.tim
 
 `--pack-ahead` — пачка формирующегося D1 как запрос; аналоги на D1, H4 и M30; исход — закрытие следующего D1 справа. Цепочку odds не считает (odds эволюционировал в сеть). Доли по каждому ТФ отдельно, без базы и lift.
 
-`--train-net` / `--net` / `--watch-net` — нейронка по парным связкам, общие веса на одну связку (продолжение `--odds`). Учит три головы ahead (10 / 30 / 240 M1); точку на графике не учит (`Wa` нет). Круг M10/M30 — среднее трёх softmax и порог 45% / зазор 8%. Полное описание: [analyzer-net.md](analyzer-net.md#точка-обучение-и-живой-график). `--net` пишет CSV для `*AnalyzerNet`. Сетапы `*AnalyzerMarks` не меняет. Нужен numpy. После снятия `Wa` — `--train-net`.
+`--train-net` / `--net` / `--watch-net` / `--watch-net-pool` — нейронка по **связкаМ1М5М10М20** (продолжение `--odds`). Учит четыре головы ahead (1 / 5 / 10 / 20 M1) на одном векторе 2 M1 + 2 M5 + 2 M10 + 1 M20 плюс доли аналогов **связкаМ1М10** / **связкаМ5М10** / **связкаМ10М20** (цепочка 5, `sim ≥ 60%`); точку на графике не учит (`Wa` нет). В лоссе ahead крупный ход окна весит больше (потолок 8): [analyzer-net.md](analyzer-net.md#вес-крупного-хода-ahead). Круг только на M10 — голова 10 M1, порог 52% / зазор 10%, согласие со средним четырёх и вето импульса. Пунктир — среднее четырёх. Полное описание: [analyzer-net.md](analyzer-net.md#точка-обучение-и-живой-график). `--net` пишет CSV для `*AnalyzerNet`. `--train-net --sec` пишет per-sec npz, не общий. `--watch-net-pool` поднимает несколько процессов `--watch-net` (по умолчанию число ядер, **макс. 8**; явный `--jobs` > 8 обрезается). GUI того же пула: [WatchNetUi](../tools/WatchNetUi/README.md). Сетапы `*AnalyzerMarks` не меняет. Нужен numpy. После смены связки — `--train-net`.
 
 ## Сетапы
 
-Порядок в `setup_signal`: buy, sell, buy1, sell1, buy2, sell2, иначе `none`.
+Порядок в `setup_signal`: buy, sell, buy1, sell1, buy2, sell2, buy3, sell3, иначе `none`.
 
 - **buy / sell** — классический стек small+middle+current+hist.
 - **buy1 / sell1** — кросс как M10 25.08.2026 17:20; middle ещё с той стороны, наклон `flat` или против тренда (не только `falling`/`rising`).
 - **buy2 / sell2** — как Si M1 22.09.2026 18:55 (middle относительно своей EMA: buy2 ниже EMA, sell2 выше).
+- **buy3 / sell3** — продолжение после V: разворот current из-под EMA или у EMA при hist сжимающемся (CNY M10 20:30 / M30 18:30–19:00). Фазы «уже над EMA» / «уже под EMA» нет: buy не ставят при `current` выше EMA, sell — при ниже.
 
-Полные теги (одна таблица на все шесть сетапов) и счётчик появлений — в [analyzer-marks.md](analyzer-marks.md). Разбор графика — [пачка](tag-packs.md) на каждом ТФ (≥5 тегов **формирующегося** бара, такт M1), движение и паттерны — [парные связки](tag-packs.md) D1–H4 / H4–M30 / M30–M10, динамика пары — [цепочка связок](tag-packs.md). Похожесть — по числам живого графика (`z`), не Hamming по готовым меткам; схема: [tag-similarity.svg](images/tag-similarity.svg).
+Полные теги (одна таблица на все шесть сетапов) и счётчик появлений — в [analyzer-marks.md](analyzer-marks.md). Разбор графика — [пачка](tag-packs.md) на каждом ТФ (≥5 тегов **формирующегося** бара, такт M1), движение и паттерны — [парные связки](tag-packs.md) M1–M10 / M5–M10 / M10–M20 (цепочка 5), динамика пары — [цепочка связок](tag-packs.md). Похожесть — по числам живого графика (`z`), не Hamming по готовым меткам; схема: [tag-similarity.svg](images/tag-similarity.svg).
 
 ## Свечи
 

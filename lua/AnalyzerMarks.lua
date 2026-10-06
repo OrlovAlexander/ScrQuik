@@ -1,4 +1,4 @@
--- Overlay for analyzer setups (buy/sell/buy1/sell1/buy2/sell2) on M1, M10, M30, H4, D1.
+-- Overlay for analyzer setups (buy/sell/buy1/sell1/buy2/sell2/buy3/sell3) on M1, M10, M30, H4, D1.
 -- CSV from: python -m analyzer --watch
 -- Put this indicator on the price pane (same window as candles).
 
@@ -15,6 +15,8 @@ local palette = isDark and {
     sell1 = RGB(255, 170, 50),
     buy2  = RGB(200, 255, 80),
     sell2 = RGB(220, 90, 220),
+    buy3  = RGB(40, 255, 220),
+    sell3 = RGB(255, 90, 170),
 } or {
     buy   = RGB(0, 170, 60),
     sell  = RGB(210, 30, 30),
@@ -22,6 +24,8 @@ local palette = isDark and {
     sell1 = RGB(210, 120, 0),
     buy2  = RGB(130, 180, 0),
     sell2 = RGB(170, 40, 160),
+    buy3  = RGB(0, 200, 170),
+    sell3 = RGB(200, 20, 110),
 }
 
 _G.Settings = {
@@ -68,6 +72,18 @@ _G.Settings = {
             Color = palette.sell2,
             Type  = TYPE_POINT,
             Width = 3
+        },
+        {
+            Name  = "buy3",
+            Color = palette.buy3,
+            Type  = TYPE_POINT,
+            Width = 4
+        },
+        {
+            Name  = "sell3",
+            Color = palette.sell3,
+            Type  = TYPE_POINT,
+            Width = 4
         }
     }
 }
@@ -283,12 +299,12 @@ end
 local function markerY(index, setup)
     local pct = tonumber(_G.Settings.OffsetPct) or 0.15
     pct = pct / 100.0
-    if setup == "buy" or setup == "buy1" or setup == "buy2" then
+    if setup == "buy" or setup == "buy1" or setup == "buy2" or setup == "buy3" then
         local lo = _G.L(index)
         if lo == nil then return nil end
         return lo * (1.0 - pct)
     end
-    if setup == "sell" or setup == "sell1" or setup == "sell2" then
+    if setup == "sell" or setup == "sell1" or setup == "sell2" or setup == "sell3" then
         local hi = _G.H(index)
         if hi == nil then return nil end
         return hi * (1.0 + pct)
@@ -297,9 +313,9 @@ local function markerY(index, setup)
 end
 
 local function valuesFor(index, byKey)
-    local buy, sell, buy1, sell1, buy2, sell2 = nil, nil, nil, nil, nil, nil
+    local buy, sell, buy1, sell1, buy2, sell2, buy3, sell3 = nil, nil, nil, nil, nil, nil, nil, nil
     if byKey == nil then
-        return buy, sell, buy1, sell1, buy2, sell2
+        return buy, sell, buy1, sell1, buy2, sell2, buy3, sell3
     end
     local key = barKey(index)
     local row = key ~= nil and byKey[key] or nil
@@ -310,17 +326,19 @@ local function valuesFor(index, byKey)
         end
     end
     if row == nil or row.setup == "none" then
-        return buy, sell, buy1, sell1, buy2, sell2
+        return buy, sell, buy1, sell1, buy2, sell2, buy3, sell3
     end
     local tf = chartTfTag()
     local onsetOnly = tonumber(_G.Settings.OnsetOnly) or 1
     -- Daily bars often do not share 00:00 with CSV; still show the setup bar, not only onset.
-    if onsetOnly ~= 0 and row.onset ~= 1 and not (tf == "D1" or tf == "NA" or string.match(tf, "^D%d+$")) then
-        return buy, sell, buy1, sell1, buy2, sell2
+    -- buy3/sell3: paint the whole run (turn from below/near EMA), not only the first bar.
+    local keepRun = row.setup == "buy3" or row.setup == "sell3"
+    if onsetOnly ~= 0 and row.onset ~= 1 and not keepRun and not (tf == "D1" or tf == "NA" or string.match(tf, "^D%d+$")) then
+        return buy, sell, buy1, sell1, buy2, sell2, buy3, sell3
     end
     local y = markerY(index, row.setup)
     if y == nil then
-        return buy, sell, buy1, sell1, buy2, sell2
+        return buy, sell, buy1, sell1, buy2, sell2, buy3, sell3
     end
     if row.setup == "buy" then
         buy = y
@@ -334,21 +352,27 @@ local function valuesFor(index, byKey)
         buy2 = y
     elseif row.setup == "sell2" then
         sell2 = y
+    elseif row.setup == "buy3" then
+        buy3 = y
+    elseif row.setup == "sell3" then
+        sell3 = y
     end
-    return buy, sell, buy1, sell1, buy2, sell2
+    return buy, sell, buy1, sell1, buy2, sell2, buy3, sell3
 end
 
 local function paintBar(index, byKey)
     if SetValue == nil then
         return
     end
-    local buy, sell, buy1, sell1, buy2, sell2 = valuesFor(index, byKey)
+    local buy, sell, buy1, sell1, buy2, sell2, buy3, sell3 = valuesFor(index, byKey)
     SetValue(index, 1, buy)
     SetValue(index, 2, sell)
     SetValue(index, 3, buy1)
     SetValue(index, 4, sell1)
     SetValue(index, 5, buy2)
     SetValue(index, 6, sell2)
+    SetValue(index, 7, buy3)
+    SetValue(index, 8, sell3)
 end
 
 local function paintAll(byKey)
@@ -405,7 +429,7 @@ local function Algo()
             prevSize = _G.Size and _G.Size() or 0
         end
         if not MARKS_TF[tf] and (byKey == nil or next(byKey) == nil) then
-            return nil, nil, nil, nil, nil, nil
+            return nil, nil, nil, nil, nil, nil, nil, nil
         end
         local nBars = _G.Size and _G.Size() or 0
         if index == nBars and nBars > 0 then
@@ -435,7 +459,7 @@ end
 
 function _G.Init()
     PlotLines = Algo()
-    return 6
+    return 8
 end
 
 function _G.OnChangeSettings()

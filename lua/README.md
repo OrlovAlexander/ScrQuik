@@ -9,7 +9,7 @@
 | `RPM_TF_Current.lua` | `*RPM_TF_Current` | M1, M10, M30, H4, D1 |
 | `RPM_TF_Up_5.lua` | `*RPM_TF_Up_5` | M1, M10, M30, H4, D1 |
 | `AnalyzerMarks.lua` | `*AnalyzerMarks` | M1, M10, M30, H4, D1, панель цены (на D1 сверка CSV по дате) |
-| `AnalyzerNet.lua` | `*AnalyzerNet` | флет режима; три пунктира среднего; точки M10/M30 на 33; без impulse/pullback/uncertain/100 |
+| `AnalyzerNet.lua` | `*AnalyzerNet` | отдельное окно на M1/M10/M30/H4/D1; три пунктира среднего; не тянуть mix правее последней строки CSV; точки только M10 на 33 (голова 10 M1 + вето); на D1/H4/M30/M1 кругов нет — только пунктир; CNY/CR/CRZ6 → `CR_SPBFUT_*.csv` |
 
 Ini в репозитории (`config/`) читает Python-анализатор. QUIK на графике берёт параметры из окна настроек / `finam.wnd`.
 

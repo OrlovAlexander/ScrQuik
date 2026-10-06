@@ -1,6 +1,6 @@
 # Метки анализатора на графике QUIK
 
-Анализатор считает сетапы `buy` / `sell` / `buy1` / `sell1` / `buy2` / `sell2` по ряду, собранному **из M1**. На истории — тот же динамический такт M1. **Не одна метка на закрытый M10/M30/H4/D1.** CSV M10/M30/H4/D1 — сверка бара на закрытии. Точки оверлея — только **закрытый** бар (формирующийся не рисуют, чтобы не моргал сетап). Расчёт пачки на каждом M1 при этом не отменяют. Ограничение для правок и новых анализаторов: [tf-from-m1.md](tf-from-m1.md).
+Анализатор считает сетапы `buy` / `sell` / `buy1` / `sell1` / `buy2` / `sell2` / `buy3` / `sell3` по ряду, собранному **из M1**. На истории — тот же динамический такт M1. **Не одна метка на закрытый M10/M30/H4/D1.** CSV M10/M30/H4/D1 — сверка бара на закрытии. Точки оверлея — только **закрытый** бар (формирующийся не рисуют, чтобы не моргал сетап). Расчёт пачки на каждом M1 при этом не отменяют. Ограничение для правок и новых анализаторов: [tf-from-m1.md](tf-from-m1.md).
 Индикатор `*AnalyzerMarks` только рисует эти сетапы точками на цене.
 Сами RPM на графике по-прежнему считает Lua (current / up). Паттерн 121 — архив, на метки не влияет.
 
@@ -31,7 +31,7 @@
 
 barsSaver дописывает строку, когда у бара **новое время** (закрылась предыдущая свеча). Тики текущей свечи в файл не попадают.
 
-После правки `sec_list.txt` скрипт нужно **перезапустить**. Если M1 одного тикера перестал расти, а M10 того же тикера пишется — перезапустить barsSaver (обрыв datasource после disconnect QUIK).
+После правки `sec_list.txt` скрипт нужно **перезапустить**. Если M1 одного тикера перестал расти, а M10 того же тикера пишется — патч barsSaver сам пересоздаёт datasource (см. [barsSaver.md](barsSaver.md)); если не помогло — перезапустить скрипт.
 
 ### 2. Анализатор
 
@@ -96,34 +96,36 @@ M1, M10, M30, H4 и D1. Пример: `GAZP_TQBR_M10.csv`, `GAZP_TQBR_H4.csv`, `
 | оранжевая | sell1 | над high |
 | жёлто-зелёная | buy2 | под low |
 | сиреневая | sell2 | над high |
+| яркая бирюза | buy3 | под low |
+| розово-красная | sell3 | над high |
 
-Порядок проверки: buy, sell, buy1, sell1, buy2, sell2, иначе `none`. Тег, которого нет в таблице сетапа, **не проверяется** (любое значение подходит). Метки только по **закрытому** бару: формирующаяся свеча на графике в расчёт не входит.
+Порядок проверки: buy, sell, buy1, sell1, buy2, sell2, buy3, sell3, иначе `none`. Общий фильтр: **buy\* не ставят**, если `current.vs_ema = above_ema`; **sell\* не ставят**, если `current.vs_ema = below_ema`. Тег, которого нет в таблице сетапа, **не проверяется** (любое значение подходит). Метки только по **закрытому** бару: формирующаяся свеча на графике в расчёт не входит.
 
 Наклон и флет в ячейках: `(/)` рост, `(\)` падение, `(-)` флет.
 
 ### Все сетапы
 
-| тег | buy | sell | buy1 | sell1 | buy2 | sell2 |
-|---|---|---|---|---|---|---|
-| current.vs0 | `below_0` | `above_0` | `below_0` | `above_0` | `below_0` | `above_0` |
-| current.vs_ema | `below_ema` | `above_ema` | `below_ema` | `above_ema` | `below_ema` | `above_ema` |
-| current.slope | | | `rising_below_ema` `(/)` | `falling_above_ema` `(\)` | | |
-| current.ema_vs0 | `below_0` | `above_0` | | | `above_0` | `below_0` |
-| current.ema_trend | | | | | `falling` `(\)` | `rising` `(/)` |
-| small.vs0 | `below_0` | `above_0` | `above_0` | `below_0` | `above_0` | `below_0` |
-| small.vs_ema | `below_ema` | `above_ema` | `below_ema` | `above_ema` | `above_ema` | `below_ema` |
-| small.slope | | | `falling_below_ema` `(\)` | `rising_above_ema` `(/)` | `rising_above_ema` `(/)` | `falling_below_ema` `(\)` |
-| small.ema_vs0 | `below_0` | `above_0` | `above_0` | `below_0` | `above_0` | `below_0` |
-| small.ema_slope | | | `falling` `(\)` | `rising` `(/)` | | |
-| small.ema_trend | `falling` `(\)` | `rising` `(/)` | | | `rising` `(/)` | `falling` `(\)` |
-| middle.vs0 | `below_0` | `above_0` | `above_0` | `below_0` | `above_0` | `below_0` |
-| middle.vs_ema | `below_ema` | `above_ema` | `above_ema` | `below_ema` | `below_ema` | `above_ema` |
-| middle.slope | | | `flat_above_ema` `(-)` или `falling_above_ema` `(\)` | `flat_below_ema` `(-)` или `rising_below_ema` `(/)` | | |
-| middle.ema_vs0 | `below_0` | `above_0` | `above_0` | `below_0` | `above_0` | `below_0` |
-| middle.ema_slope | | | `flat` `(-)` или `falling` `(\)` | `flat` `(-)` или `rising` `(/)` | | |
-| middle.ema_trend | `falling` `(\)` | `rising` `(/)` | | | `falling` `(\)` | `rising` `(/)` |
-| hist.hist_sign | `below_0` | `above_0` | `above_0` | `below_0` | `above_0` | `below_0` |
-| hist.hist_dir | `hist_growing` `(\)` | `hist_growing` `(/)` | `hist_shrinking` `(\)` | `hist_shrinking` `(/)` | `hist_shrinking` `(\)` | `hist_shrinking` `(/)` |
+| тег | buy | sell | buy1 | sell1 | buy2 | sell2 | buy3 | sell3 |
+|---|---|---|---|---|---|---|---|---|
+| current.vs0 | `below_0` | `above_0` | `below_0` | `above_0` | `below_0` | `above_0` | `above_0` | `below_0` |
+| current.vs_ema | `below_ema` | `above_ema` | `below_ema` | `above_ema` | `below_ema` | `above_ema` | `below_ema` `near_ema` | `above_ema` `near_ema` |
+| current.slope | | | `rising_below_ema` `(/)` | `falling_above_ema` `(\)` | | | `rising_below_ema` `(/)` | `falling_above_ema` `(\)` |
+| current.ema_vs0 | `below_0` | `above_0` | | | `above_0` | `below_0` | `above_0` | `below_0` |
+| current.ema_trend | | | | | `falling` `(\)` | `rising` `(/)` | `falling` `(\)` | `rising` `(/)` |
+| small.vs0 | `below_0` | `above_0` | `above_0` | `below_0` | `above_0` | `below_0` | `above_0` | `below_0` |
+| small.vs_ema | `below_ema` | `above_ema` | `below_ema` | `above_ema` | `above_ema` | `below_ema` | | |
+| small.slope | | | `falling_below_ema` `(\)` | `rising_above_ema` `(/)` | `rising_above_ema` `(/)` | `falling_below_ema` `(\)` | | |
+| small.ema_vs0 | `below_0` | `above_0` | `above_0` | `below_0` | `above_0` | `below_0` | | |
+| small.ema_slope | | | `falling` `(\)` | `rising` `(/)` | | | | |
+| small.ema_trend | `falling` `(\)` | `rising` `(/)` | | | `rising` `(/)` | `falling` `(\)` | | |
+| middle.vs0 | `below_0` | `above_0` | `above_0` | `below_0` | `above_0` | `below_0` | `above_0` | `below_0` |
+| middle.vs_ema | `below_ema` | `above_ema` | `above_ema` | `below_ema` | `below_ema` | `above_ema` | | |
+| middle.slope | | | `flat_above_ema` `(-)` или `falling_above_ema` `(\)` | `flat_below_ema` `(-)` или `rising_below_ema` `(/)` | | | | |
+| middle.ema_vs0 | `below_0` | `above_0` | `above_0` | `below_0` | `above_0` | `below_0` | | |
+| middle.ema_slope | | | `flat` `(-)` или `falling` `(\)` | `flat` `(-)` или `rising` `(/)` | | | | |
+| middle.ema_trend | `falling` `(\)` | `rising` `(/)` | | | `falling` `(\)` | `rising` `(/)` | | |
+| hist.hist_sign | `below_0` | `above_0` | `above_0` | `below_0` | `above_0` | `below_0` | `above_0` | `below_0` |
+| hist.hist_dir | `hist_growing` `(\)` | `hist_growing` `(/)` | `hist_shrinking` `(\)` | `hist_shrinking` `(/)` | `hist_shrinking` `(\)` | `hist_shrinking` `(/)` | `hist_shrinking` `(\)` | `hist_shrinking` `(/)` |
 
 На графике H4 слои up: small = H12, middle = D1, hist = W1.
 На дневном графике (D1, из `finam.wnd`): small = D5, middle = W2, hist = W5. Слоты D5/W2/W5 в Python совпадают с Lua (unix-дни, не `toordinal()`), иначе `hist_dir` расходится с цветом столбика на графике.
@@ -132,7 +134,7 @@ M1, M10, M30, H4 и D1. Пример: `GAZP_TQBR_M10.csv`, `GAZP_TQBR_H4.csv`, `
 
 ### Словарь тегов
 
-**Тег** — одно свойство RPM на формирующемся баре: слой + поле + значение (`M1.current.vs0 = above_0`). Пачка — ≥5 тегов **одного формирующегося бара одного ТФ**, дискретность пересчёта по M1, не россыпь тегов с разных ТФ; движение и паттерны — парные связки D1–H4 / H4–M30 / M30–M10; цепочка — соседние бары **того же** ТФ и дельты пачки; динамика пары — цепочка связок. Похожесть — по числам живого графика (`z`), не по готовым меткам; схема: [tag-similarity.svg](images/tag-similarity.svg). Определения: [tag-packs.md](tag-packs.md). Метки сетапов на графике по-прежнему только по **закрытому** бару.
+**Тег** — одно свойство RPM на формирующемся баре: слой + поле + значение (`M1.current.vs0 = above_0`). Пачка — ≥5 тегов **одного формирующегося бара одного ТФ**, дискретность пересчёта по M1, не россыпь тегов с разных ТФ; движение и паттерны — парные связки M1–M10 / M5–M10 / M10–M20; цепочка — соседние бары **того же** ТФ (окно 5) и дельты пачки; динамика пары — цепочка связок. Похожесть — по числам живого графика (`z`), не по готовым меткам; схема: [tag-similarity.svg](images/tag-similarity.svg). Определения: [tag-packs.md](tag-packs.md). Метки сетапов на графике по-прежнему только по **закрытому** бару.
 
 | тег | где | описание |
 |---|---|---|
@@ -167,7 +169,7 @@ M1, M10, M30, H4 и D1. Пример: `GAZP_TQBR_M10.csv`, `GAZP_TQBR_H4.csv`, `
 
 Пороги: `NEAR_ZERO=0.25`, `NEAR_EMA=0.15`, `NEAR_SLOPE=0.08`, `NEAR_HIST=0.15`, тренд EMA — 5 баров.
 
-Разбор «что на графике» — [пачка](tag-packs.md) на каждом ТФ, [парная связка](tag-packs.md) D1–H4 / H4–M30 / M30–M10, [цепочка](tag-packs.md) в окне соседних свечей, [цепочка связок](tag-packs.md) если смотрят смену этой пары от кадра к кадру. Порог похожести — к z с живого графика, затем пересчёт тегов ([tag-packs.md](tag-packs.md#похожесть)). Не один `vs0` и не один сетап.
+Разбор «что на графике» — [пачка](tag-packs.md) на каждом ТФ, [парная связка](tag-packs.md) M1–M10 / M5–M10 / M10–M20, [цепочка](tag-packs.md) в окне 5 соседних свечей, [цепочка связок](tag-packs.md) если смотрят смену этой пары от кадра к кадру. Порог похожести — к z с живого графика, затем пересчёт тегов ([tag-packs.md](tag-packs.md#похожесть)). Не один `vs0` и не один сетап.
 
 ### buy / sell
 
@@ -186,6 +188,14 @@ M1, M10, M30, H4 и D1. Пример: `GAZP_TQBR_M10.csv`, `GAZP_TQBR_H4.csv`, `
 Как Si M1 22.09.2026 18:55. Наклон middle и 1-барный `slope` current не входят.
 
 ![buy2 слева, sell2 справа: current под нулём при EMA над нулём, small растёт, middle ниже своей EMA](images/setup-buy2-sell2.svg)
+
+### buy3 / sell3
+
+Продолжение после V, не кросс buy1 с той стороны нуля. Только фаза **разворота**: current **уже выше нуля**, растёт из-под своей EMA или у EMA (`below_ema` / `near_ema`), EMA current ещё над нулём и падает. Small и middle тоже выше нуля. Hist выше нуля и сжимается (оранжевый столбик).
+
+**Не ставят** buy3, если current уже **выше** своей EMA. Sell3 — зеркало: не ставят, если current **ниже** своей EMA. То же правило — для всех вариантов buy/sell (buy, buy1, buy2, buy3 / sell…).
+
+Sell3 — зеркало разворота. На графике buy3/sell3 рисуют **всю серию**, не только onset.
 
 ## Как часто в истории
 

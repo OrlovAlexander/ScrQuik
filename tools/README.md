@@ -12,3 +12,8 @@ python tools/one2one/move_stats.py --help
 ```
 
 Кэши `cache_*.json` и `move_stats_*.json` в git не входят. JSON с результатами sweep (`sweep_*.json`) — зафиксированные прогоны.
+
+## WatchNetUi
+
+WPF-монитор пула `--watch-net` (не 121): [WatchNetUi/README.md](WatchNetUi/README.md).
+

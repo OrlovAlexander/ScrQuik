@@ -1,18 +1,15 @@
 # -*- coding: utf-8 -*-
-"""Standalone MLP on pair-bundle chains (evolved from --odds).
+"""Standalone MLP on связкаМ1М5М10М20 (evolved from --odds pair bundles).
 
-Input = one pair bundle (связкаД1Н4 / связкаН4М30 / связкаМ30М10):
-3 neighboring packs of the senior TF + 3 of the junior. Same weights
-for every pair so knowledge mixes across TFs. Not a snapshot of five
-TFs. Training samples every M1. Ahead is three readouts (one per
-pair: 10 / 30 / 240 M1). No action head (Wa): do not train it, do not
-draw it. Live action is the equal mean of the three ahead softmaxes.
-Chart ahead lines are that same mean (flat / up / down), not one TF's
-head. Senior TFs on history are M1-built: closed slots frozen at close,
-forming OHLC to minute t (CSV only verifies close).
-Regime = impulse/pullback vs senior RPM on every bar. A minute with
-no room for the longest ahead is not a training row. Does not change
-combo buy/sell. Do not extend --odds; continue this net instead.
+Input = one bundle: 2 M1 + 2 M5 + 2 M10 + 1 M20, plus pattern-pair
+shares (связкаМ1М10 / связкаМ5М10 / связкаМ10М20, chain 5). Not three
+pair-bundles as the pack frame, not D1/H4/M30. Training samples every
+M1. Ahead is four readouts on that same vector (1 / 5 / 10 / 20 M1).
+No action head (Wa).
+Live dashed lines are the equal mean of the four ahead softmaxes.
+M10 circles use the 10 M1 ahead head plus an impulse veto.
+M5 and M20 are M1-built. Does not change combo buy/sell.
+Do not extend --odds; continue this net instead.
 """
 
 from __future__ import annotations
@@ -36,7 +33,6 @@ from analyzer.combo import (
 )
 from analyzer.marks import mark_sec_names, watch_marks
 from analyzer.odds import (
-    BUNDLE_PAIRS,
     DT_FMT,
     FLAT_FRAC,
     FLAT_PCT,
@@ -49,6 +45,7 @@ from analyzer.odds import (
     slot_open,
     tf_numeric,
 )
+from analyzer.patterns import PATTERN_DIM, empty_pattern_vec, pattern_feat_series, pattern_pair_names
 from analyzer.tf_from_m1 import replay_tf_book
 from analyzer.states import (
     EMA_TREND_BARS,
@@ -62,12 +59,16 @@ from analyzer.states import (
     _vs_ema,
 )
 
-NET_TFS = ("M1", "M10", "M30", "H4", "D1")
+NET_TFS = ("M1", "M5", "M10", "M20", "M30", "H4", "D1")
 NET_DIR = Path(r"C:\QuikFinam\LuaIndicators\analyzer_net")
 NET_CSV_DIR = NET_DIR
 WEIGHTS_NAME = "net.npz"
 NET_CHART_TFS = ("M1", "M10", "M30", "H4", "D1")
 NET_WATCH_TFS = ("M1", "M10", "M30", "H4")
+# One export_net is ~60–90s (analog search). Cap at 1 per poll and fair-queue
+# so a hot head-of-shard ticker cannot starve the rest.
+NET_DIRTY_BUDGET_SEC = 100.0
+NET_MAX_EXPORTS_PER_POLL = 1
 CHAIN_BARS = 3
 STRIDE = 1
 _WRITE_TRIES = 6
@@ -78,7 +79,9 @@ BATCH = 96
 LR = 0.008
 MOMENTUM = 0.9
 WEIGHT_DECAY = 2e-4
-PATIENCE = 8
+PATIENCE = 12
+MIN_EPOCHS = 16
+MOVE_WEIGHT_CAP = 8.0
 VAL_FRAC = 0.2
 MIN_PACK_TAGS = 5
 LAYER_DIV_LOOK = 3
@@ -87,28 +90,31 @@ R_MULT = 2.0
 GIVEBACK = 1.0
 STOP_BARS = 10
 TRADE_HORIZON = 120
-ACTION_MIN = 0.45
-ACTION_GAP = 0.08
+ACTION_MIN = 0.52
+ACTION_GAP = 0.10
 POINT_REGIME_MIN = 0.55
 AHEAD_BARS = 10
 AHEAD_MIN = 0.45
-# horizon in junior bars of the pair; sample grid is always M1
-BUNDLE_AHEAD = {
-    ("M30", "M10"): {"clock": "M1", "period": 1, "bars": 10},
-    ("H4", "M30"): {"clock": "M5", "period": 5, "bars": 6},
-    ("D1", "H4"): {"clock": "M30", "period": 30, "bars": 8},
-}
+NET_BUNDLE_TFS = ("M1", "M5", "M10", "M20")
+NET_BUNDLE_NAME = "связкаМ1М5М10М20"
+NET_CHAIN_BARS = {"M1": 2, "M5": 2, "M10": 2, "M20": 1}
+NET_CHAIN_PACKS = sum(NET_CHAIN_BARS[tf] for tf in NET_BUNDLE_TFS)
+# head 0 = 20 M1 (M20), 1 = 10 M1 (M10), 2 = 5 M1 (M5), 3 = 1 M1
+AHEAD_BARS_BY_HEAD = (20, 10, 5, 1)
+N_AHEAD_HEADS = len(AHEAD_BARS_BY_HEAD)
+_AHEAD_W = tuple(f"Wh{k}" for k in range(N_AHEAD_HEADS))
+_AHEAD_B = tuple(f"bh{k}" for k in range(N_AHEAD_HEADS))
+_MLP_PARAMS = ("W1", "b1", "W2", "b2", "Wr", "br") + _AHEAD_W + _AHEAD_B
 
 
-def ahead_horizon_m1(pair: tuple[str, str]) -> int:
-    """Ahead window in M1 bars from this minute (6 M5 = 30 M1, 8 M30 = 240 M1)."""
-    spec = BUNDLE_AHEAD[pair]
-    return int(spec["period"]) * int(spec["bars"])
+def ahead_horizon_m1(head: int) -> int:
+    """Ahead window in M1 bars for this readout."""
+    return int(AHEAD_BARS_BY_HEAD[head])
 
 
 def max_ahead_m1() -> int:
     """Longest ahead window; training needs this many M1 after the row."""
-    return max(ahead_horizon_m1(pair) for pair in BUNDLE_PAIRS)
+    return max(AHEAD_BARS_BY_HEAD)
 
 
 def train_label_stop(n: int, *, overlay: bool) -> int:
@@ -118,33 +124,27 @@ def train_label_stop(n: int, *, overlay: bool) -> int:
     return n - max_ahead_m1()
 
 
-def ahead_head_index(pair: tuple[str, str]) -> int:
-    """Which ahead readout: 0=D1H4, 1=H4M30, 2=M30M10."""
-    return BUNDLE_PAIRS.index(pair)
-
-
-def ahead_pair_for_tf(tf: str) -> tuple[str, str]:
-    """Chart TF → pair whose junior bar is the next candle of this graph."""
+def ahead_head_for_tf(tf: str) -> int:
+    """Chart TF → ahead head whose window is the next candle of this graph."""
     return {
-        "M1": ("M30", "M10"),
-        "M10": ("M30", "M10"),
-        "M30": ("H4", "M30"),
-        "H4": ("D1", "H4"),
-        "D1": ("D1", "H4"),
+        "M1": 3,
+        "M5": 2,
+        "M10": 1,
+        "M20": 0,
+        "M30": 0,
+        "H4": 0,
+        "D1": 0,
     }[tf]
 
 
-N_AHEAD_HEADS = len(BUNDLE_PAIRS)
-_AHEAD_W = tuple(f"Wh{k}" for k in range(N_AHEAD_HEADS))
-_AHEAD_B = tuple(f"bh{k}" for k in range(N_AHEAD_HEADS))
-_MLP_PARAMS = ("W1", "b1", "W2", "b2", "Wr", "br") + _AHEAD_W + _AHEAD_B
-POINT_TFS = ("M10", "M30")
+POINT_TFS = ("M10",)
+POINT_CSV_KEYS = ("action", "buy_in", "sell_in")
 FUT_TRAIN_REPEAT = 4
 REGIME_EMA = 8
 REGIME_NAMES = ("flat", "impulse", "pullback")
 ACTION_NAMES = ("none", "buy_in", "sell_in", "buy_out", "sell_out")
 AHEAD_NAMES = ("ahead_flat", "ahead_up", "ahead_down")
-SETUP_NAMES = ("none", "buy", "sell", "buy1", "sell1", "buy2", "sell2")
+SETUP_NAMES = ("none", "buy", "sell", "buy1", "sell1", "buy2", "sell2", "buy3", "sell3")
 _NUM_FIELDS = (
     ("current", "rpm"),
     ("current", "ema"),
@@ -154,9 +154,14 @@ _NUM_FIELDS = (
     ("small", "ema"),
     ("small", "hist"),
     ("small", "d_rpm"),
+    ("small", "d_ema"),
+    ("small", "d_hist"),
     ("middle", "rpm"),
     ("middle", "ema"),
     ("middle", "hist"),
+    ("middle", "d_rpm"),
+    ("middle", "d_ema"),
+    ("middle", "d_hist"),
     ("hist", "hist"),
     ("hist", "d_hist"),
 )
@@ -164,15 +169,53 @@ _PARENT = {"d_rpm": "rpm", "d_ema": "ema", "d_hist": "hist"}
 _ZERO = {"below_0": -1.0, "near_0": 0.0, "above_0": 1.0}
 _EMA = {"below_ema": -1.0, "near_ema": 0.0, "above_ema": 1.0}
 _HIST_DIR = {"hist_shrinking": -1.0, "hist_growing": 1.0}
-# nums + 8 marks + setups + miss_hist_buy/sell + pack_bias + layer_div_buy/sell + pack_ok
-TF_DIM = len(_NUM_FIELDS) + 8 + len(SETUP_NAMES) + 5 + 1
-# кадр одной связки = цепочка старшего ТФ (3 пачки) + цепочка младшего (3 пачки)
-FRAME_DIM = TF_DIM * CHAIN_BARS * 2
-IN_DIM = FRAME_DIM
+# nums + 3 layers × (vs0, vs_ema, slope, ema_vs0, ema_slope, ema_trend) + hist_sign/dir
+# + setups + miss_hist_buy/sell + pack_bias + layer_div_buy/sell + pack_ok
+_LAYER_MARKS = 6
+_HIST_MARKS = 2
+_PACK_EXTRA = 5
+TF_DIM = len(_NUM_FIELDS) + 3 * _LAYER_MARKS + _HIST_MARKS + len(SETUP_NAMES) + _PACK_EXTRA + 1
+# кадр = 2 пачки M1 + 2 M5 + 2 M10 + 1 M20; плюс доли трёх парных связок
+FRAME_DIM = TF_DIM * NET_CHAIN_PACKS
+IN_DIM = FRAME_DIM + PATTERN_DIM
 
 
 def weights_path(dest_dir: Path | None = None) -> Path:
     return (dest_dir or NET_DIR) / WEIGHTS_NAME
+
+
+def sec_weights_path(sec: str, class_code: str, dest_dir: Path | None = None) -> Path:
+    return (dest_dir or NET_DIR) / f"net_{sec}_{class_code}.npz"
+
+
+def resolve_live_weights(
+    sec: str | None = None,
+    class_code: str | None = None,
+    dest_dir: Path | None = None,
+    data_dir=None,
+) -> Path:
+    """Per-instrument npz if present, else global net.npz."""
+    dest = dest_dir or NET_DIR
+    if sec and class_code:
+        for name in mark_sec_names(sec, class_code, data_dir):
+            path = sec_weights_path(name, class_code, dest)
+            if path.is_file():
+                return path
+    return weights_path(dest)
+
+
+def net_save_paths(
+    sec: str | None,
+    class_code: str | None,
+    dest_dir: Path | None = None,
+    data_dir=None,
+) -> list[Path]:
+    """With --sec writes net_{sec}_{class}.npz, never global net.npz."""
+    dest = dest_dir or NET_DIR
+    if sec:
+        cls = class_code or "TQBR"
+        return [sec_weights_path(name, cls, dest) for name in mark_sec_names(sec, cls, data_dir)]
+    return [weights_path(dest)]
 
 
 def _z(pack: dict, layer: str, key: str, scales: dict) -> float:
@@ -190,6 +233,18 @@ def _slope_dir(slope: str) -> float:
     if slope.startswith("falling"):
         return -1.0
     return 0.0
+
+
+def _layer_marks(layer: dict) -> list[float]:
+    """vs0, vs_ema, slope, ema_vs0, ema_slope, ema_trend — все теги слоя пачки."""
+    return [
+        _ZERO.get(layer.get("vs0"), 0.0),
+        _EMA.get(layer.get("vs_ema"), 0.0),
+        _slope_dir(str(layer.get("slope") or "")),
+        _ZERO.get(layer.get("ema_vs0"), 0.0),
+        _slope_dir(str(layer.get("ema_slope") or "")),
+        _slope_dir(str(layer.get("ema_trend") or "")),
+    ]
 
 
 def _ema_older(packs: list[dict], idx: int, layer: str) -> float | None:
@@ -497,19 +552,17 @@ def pack_vec(pack: dict | None, prev: dict | None, packs: list[dict], idx: int, 
         return [0.0] * TF_DIM
     cur, small, middle, hist = tagged["current"], tagged["small"], tagged["middle"], tagged["hist"]
     out = list(tagged["z"])
+    out.extend(_layer_marks(cur))
+    out.extend(_layer_marks(small))
+    out.extend(_layer_marks(middle))
     out.extend(
         [
-            _ZERO.get(cur["vs0"], 0.0),
-            _EMA.get(cur["vs_ema"], 0.0),
-            _slope_dir(cur["slope"]),
-            _ZERO.get(cur["ema_vs0"], 0.0),
-            _ZERO.get(small["vs0"], 0.0),
-            _ZERO.get(middle["vs0"], 0.0),
             _ZERO.get(hist["hist_sign"], 0.0),
             _HIST_DIR.get(hist["hist_dir"], 0.0),
         ]
     )
-    out.extend(1.0 if tagged["setup"] == name else 0.0 for name in SETUP_NAMES)
+    setup = tagged["setup"] if tagged["setup"] in SETUP_NAMES else "none"
+    out.extend(1.0 if setup == name else 0.0 for name in SETUP_NAMES)
     out.append(1.0 if miss_hist_buy(small, middle, hist, cur) else 0.0)
     out.append(1.0 if miss_hist_sell(small, middle, hist, cur) else 0.0)
     out.append(tagged["bias"])
@@ -559,7 +612,7 @@ def _tf_book(raw: dict, tf: str) -> dict | None:
 
 
 def build_books(raw: dict[str, list[Bar]]) -> dict[str, dict]:
-    """M1 as loaded; M10/M30/H4/D1 from M1 (forming at each minute, CSV only at close)."""
+    """M1 as loaded; M5/M10/M20/M30/H4/D1 from M1 (forming at each minute, CSV only at close)."""
     books: dict[str, dict] = {}
     for tf in NET_TFS:
         book = _tf_book(raw, tf)
@@ -723,27 +776,40 @@ def _overlay_tf_dts(book: dict, tf: str) -> list[datetime]:
     return times
 
 
-def _bundles_labeled(
+def _net_bundle_vec(
     vecs: dict[str, list[list[float]] | dict],
     align: dict[str, list[int | None]],
     m1_i: int,
-) -> list[tuple[tuple[str, str], list[float]]]:
-    """Present pair-bundles at this M1, each tagged with its pair."""
-    out: list[tuple[tuple[str, str], list[float]]] = []
-    for senior, junior in BUNDLE_PAIRS:
-        part = _bundle_chain(vecs, align, m1_i, senior, junior)
-        if part is not None and len(part) == IN_DIM:
-            out.append(((senior, junior), part))
+) -> list[float] | None:
+    """связкаМ1М5М10М20: 2 M1 + 2 M5 + 2 M10 + 1 M20. Drop if any current pack is empty."""
+    parts: list[float] = []
+    for tf in NET_BUNDLE_TFS:
+        chain = _chain_from_entry(vecs.get(tf), align, m1_i, tf)
+        if chain is None:
+            return None
+        parts.extend(chain)
+    if len(parts) != FRAME_DIM:
+        return None
+    return parts
+
+
+def _net_input_vec(
+    vecs: dict[str, list[list[float]] | dict],
+    align: dict[str, list[int | None]],
+    m1_i: int,
+    pattern_rows: list[list[float]],
+) -> list[float] | None:
+    """Pack frame plus analog shares of the three pattern pairs."""
+    part = _net_bundle_vec(vecs, align, m1_i)
+    if part is None:
+        return None
+    extra = pattern_rows[m1_i] if 0 <= m1_i < len(pattern_rows) else empty_pattern_vec()
+    if len(extra) != PATTERN_DIM:
+        extra = empty_pattern_vec()
+    out = part + extra
+    if len(out) != IN_DIM:
+        return None
     return out
-
-
-def _bundles_at(
-    vecs: dict[str, list[list[float]] | dict],
-    align: dict[str, list[int | None]],
-    m1_i: int,
-) -> list[list[float]]:
-    """Present pair-bundles at this M1. Same layout for every pair (senior×3 + junior×3)."""
-    return [part for _pair, part in _bundles_labeled(vecs, align, m1_i)]
 
 
 def _align_idx(align: dict[str, list[int | None]], m1_i: int, tf: str) -> int | None:
@@ -776,7 +842,7 @@ def _chain_forming(
     slot_idx: int | None,
     length: int = CHAIN_BARS,
 ) -> list[float] | None:
-    """Two frozen closed neighbors + forming last. Does not use the closed current slot."""
+    """Earlier frozen closed neighbors + forming last. Does not use the closed current slot."""
     if forming_vec is None or slot_idx is None:
         return None
     if len(forming_vec) != TF_DIM or forming_vec[-1] < 1.0:
@@ -799,6 +865,7 @@ def _chain_from_entry(
     m1_i: int,
     tf: str,
 ) -> list[float] | None:
+    length = int(NET_CHAIN_BARS.get(tf, CHAIN_BARS))
     if entry is None:
         return None
     if isinstance(entry, dict):
@@ -806,22 +873,10 @@ def _chain_from_entry(
         slots = entry.get("slot") or []
         if m1_i < 0 or m1_i >= len(forming) or m1_i >= len(slots):
             return None
-        return _chain_forming(entry.get("closed") or [], forming[m1_i], slots[m1_i])
-    return _chain_pack_vecs(entry, _align_idx(align, m1_i, tf))
+        return _chain_forming(entry.get("closed") or [], forming[m1_i], slots[m1_i], length)
+    return _chain_pack_vecs(entry, _align_idx(align, m1_i, tf), length)
 
 
-def _bundle_chain(
-    vecs: dict[str, list[list[float]] | dict],
-    align: dict[str, list[int | None]],
-    m1_i: int,
-    senior: str,
-    junior: str,
-) -> list[float] | None:
-    senior_chain = _chain_from_entry(vecs.get(senior), align, m1_i, senior)
-    junior_chain = _chain_from_entry(vecs.get(junior), align, m1_i, junior)
-    if senior_chain is None or junior_chain is None:
-        return None
-    return senior_chain + junior_chain
 
 
 def bars_from_m1(m1: list[Bar], period_min: int) -> list[Bar]:
@@ -1087,19 +1142,19 @@ def horizon_flat_threshold(
     return one if one > 0 else FLAT_PCT
 
 
-def ahead_flat_by_pair(
+def ahead_flat_by_head(
     highs: list[float],
     lows: list[float],
     closes: list[float],
-) -> dict[tuple[str, str], float]:
-    """Per-bundle flat % for ahead_label (10 / 30 / 240 M1)."""
+) -> dict[int, float]:
+    """Per-head flat % for ahead_label (240 / 30 / 10 M1)."""
     by_bars: dict[int, float] = {}
-    out: dict[tuple[str, str], float] = {}
-    for pair in BUNDLE_PAIRS:
-        bars = ahead_horizon_m1(pair)
+    out: dict[int, float] = {}
+    for head in range(N_AHEAD_HEADS):
+        bars = ahead_horizon_m1(head)
         if bars not in by_bars:
             by_bars[bars] = horizon_flat_threshold(highs, lows, closes, bars)
-        out[pair] = by_bars[bars]
+        out[head] = by_bars[bars]
     return out
 
 
@@ -1129,40 +1184,40 @@ def ahead_label(
     return 2
 
 
-def pair_ahead_labels(
+def head_ahead_labels(
     i: int,
     highs: list[float],
     lows: list[float],
     closes: list[float],
-    pair_flat: dict[tuple[str, str], float],
+    head_flat: dict[int, float],
     fallback: float,
-) -> dict[tuple[str, str], int] | None:
-    """All three horizon outcomes at this M1, or None if the longest window does not fit."""
+) -> dict[int, int] | None:
+    """All four horizon outcomes at this M1, or None if the longest window does not fit."""
     if i + max_ahead_m1() >= len(closes):
         return None
-    out: dict[tuple[str, str], int] = {}
-    for pair in BUNDLE_PAIRS:
-        out[pair] = ahead_label(
+    out: dict[int, int] = {}
+    for head in range(N_AHEAD_HEADS):
+        out[head] = ahead_label(
             i,
             highs,
             lows,
             closes,
-            pair_flat.get(pair, fallback),
-            bars=ahead_horizon_m1(pair),
+            head_flat.get(head, fallback),
+            bars=ahead_horizon_m1(head),
         )
     return out
 
 
-def action_probs_from_aheads(labels: dict[tuple[str, str], int]) -> tuple[float, float, float]:
-    """P(flat), P(up), P(down) = share of the three ahead outcomes."""
-    n = float(len(BUNDLE_PAIRS))
+def action_probs_from_aheads(labels: dict[int, int]) -> tuple[float, float, float]:
+    """P(flat), P(up), P(down) = share of the ahead-head outcomes."""
+    n = float(N_AHEAD_HEADS)
     p = [0.0, 0.0, 0.0]
-    for pair in BUNDLE_PAIRS:
-        p[int(labels[pair]) % 3] += 1.0 / n
+    for head in range(N_AHEAD_HEADS):
+        p[int(labels[head]) % 3] += 1.0 / n
     return p[0], p[1], p[2]
 
 
-def action_from_aheads(labels: dict[tuple[str, str], int]) -> int:
+def action_from_aheads(labels: dict[int, int]) -> int:
     """Fact vote on train logs: 0 none, 1 buy_in, 2 sell_in. Tie → none. Not a Wa target."""
     p_flat, p_up, p_down = action_probs_from_aheads(labels)
     probs = (p_flat, p_up, p_down)
@@ -1173,12 +1228,12 @@ def action_from_aheads(labels: dict[tuple[str, str], int]) -> int:
 
 
 def mix_ahead_probs(
-    ph_by_pair: dict[tuple[str, str], np.ndarray],
+    ph_by_head: dict[int, np.ndarray],
 ) -> np.ndarray | None:
-    """Equal mean of the three ahead softmaxes. None if a pair is missing."""
+    """Equal mean of the ahead softmaxes. None if a head is missing."""
     vecs: list[np.ndarray] = []
-    for pair in BUNDLE_PAIRS:
-        got = ph_by_pair.get(pair)
+    for head in range(N_AHEAD_HEADS):
+        got = ph_by_head.get(head)
         if got is None:
             return None
         vecs.append(np.asarray(got, dtype=np.float32).reshape(-1)[:3])
@@ -1186,7 +1241,7 @@ def mix_ahead_probs(
 
 
 def pa_from_ahead_mix(ph_mean: np.ndarray | None) -> np.ndarray:
-    """CSV action columns from the three-head mean. buy_out/sell_out stay 0. Not Wa."""
+    """CSV action columns from the ahead-head mean. buy_out/sell_out stay 0. Not Wa."""
     pa = np.zeros(len(ACTION_NAMES), dtype=np.float32)
     if ph_mean is None:
         pa[0] = 1.0
@@ -1197,8 +1252,28 @@ def pa_from_ahead_mix(ph_mean: np.ndarray | None) -> np.ndarray:
     return pa
 
 
+def ahead_side(ph: np.ndarray | None) -> int:
+    """0 flat, 1 up, 2 down, -1 missing or tie. Argmax only, no ACTION_MIN."""
+    if ph is None:
+        return -1
+    vec = np.asarray(ph, dtype=np.float32).reshape(-1)
+    if vec.size < 3:
+        return -1
+    p = [float(vec[0]), float(vec[1]), float(vec[2])]
+    best = int(max(range(3), key=lambda k: p[k]))
+    if p.count(p[best]) > 1:
+        return -1
+    return best
+
+
+def mix_agrees_with_head(ph: np.ndarray | None, mix: np.ndarray | None) -> bool:
+    """TF head and ahead-mix mean must share the same up/down winner."""
+    side = ahead_side(ph)
+    return side > 0 and side == ahead_side(mix)
+
+
 def action_from_ph_mean(ph_mean: np.ndarray | None) -> str:
-    """Point from equal mean of three ahead probabilities. No Wa, setup, veto, or exits."""
+    """Point from one ahead softmax. No Wa or exits."""
     if ph_mean is None:
         return "none"
     p = [float(ph_mean[0]), float(ph_mean[1]), float(ph_mean[2])]
@@ -1209,6 +1284,76 @@ def action_from_ph_mean(ph_mean: np.ndarray | None) -> str:
     if p[best] < ACTION_MIN or p[best] < other + ACTION_GAP:
         return "none"
     return "buy_in" if best == 1 else "sell_in"
+
+
+def veto_against_impulse(action: str, senior_dir: int, regime: int) -> str:
+    """No sell into an up impulse, no buy into a down impulse. Pack regime 1 = impulse."""
+    if action not in ("buy_in", "sell_in"):
+        return action
+    if int(regime) != 1:
+        return action
+    if action == "sell_in" and int(senior_dir) > 0:
+        return "none"
+    if action == "buy_in" and int(senior_dir) < 0:
+        return "none"
+    return action
+
+
+def point_from_pair_ph(
+    ph: np.ndarray | None,
+    senior_dir: int,
+    regime: int,
+    mix: np.ndarray | None = None,
+) -> tuple[str, float, float]:
+    """M10 circle from the 10 M1 ahead head, mix agreement, then impulse veto."""
+    action = action_from_ph_mean(ph)
+    if mix is not None and not mix_agrees_with_head(ph, mix):
+        action = "none"
+    action = veto_against_impulse(action, senior_dir, regime)
+    if ph is None:
+        return "none", 0.0, 0.0
+    vec = np.asarray(ph, dtype=np.float32).reshape(-1)
+    buy = clip_line(100.0 * float(vec[1] if len(vec) > 1 else 0.0))
+    sell = clip_line(100.0 * float(vec[2] if len(vec) > 2 else 0.0))
+    return action, buy, sell
+
+
+def apply_point_tf(rows: list[dict], tf: str) -> list[dict]:
+    """Copy per-TF action/buy_in/sell_in onto overlay rows. Mix stays in ahead_*."""
+    out: list[dict] = []
+    for row in rows:
+        item = dict(row)
+        if tf in POINT_TFS:
+            item["action"] = row.get(f"action_{tf}", "none")
+            item["buy_in"] = float(row.get(f"buy_in_{tf}", 0.0))
+            item["sell_in"] = float(row.get(f"sell_in_{tf}", 0.0))
+        else:
+            item["action"] = "none"
+        out.append(item)
+    return out
+
+
+def ahead_move_weight(
+    i: int,
+    highs: list[float],
+    lows: list[float],
+    closes: list[float],
+    bars: int,
+    flat_pct: float,
+) -> float:
+    """Ahead NLL weight: 1 at the flat threshold, up to MOVE_WEIGHT_CAP on large excursions."""
+    n = len(closes)
+    last = min(n - 1, i + bars)
+    if last <= i or i < 0 or closes[i] <= 0:
+        return 1.0
+    px = closes[i]
+    up_exc = max(highs[j] for j in range(i + 1, last + 1)) - px
+    dn_exc = px - min(lows[j] for j in range(i + 1, last + 1))
+    thresh = px * (flat_pct / 100.0)
+    if thresh <= 0:
+        thresh = px * 0.001
+    weight = max(1.0, max(up_exc, dn_exc) / thresh)
+    return float(min(MOVE_WEIGHT_CAP, weight))
 
 
 def label_trades(
@@ -1392,6 +1537,7 @@ def instrument_samples(
     bars = m1["bars"][:n]
     m1_times = [p["dt"] for p in m1["packs"][:n]]
     align = _align_maps(books, m1_times)
+    pattern_rows = pattern_feat_series(books, align, n)
     closes = [b.c for b in bars]
     highs = [b.h for b in bars]
     lows = [b.l for b in bars]
@@ -1404,9 +1550,9 @@ def instrument_samples(
     extra = [r if r else d for r, d in zip(refuse, diverge)]
     y_r = [regime_from_dirs(senior[i], m1_dir[i]) for i in range(n)]
     flat_pct = flat_threshold(closes)
-    pair_flat: dict[tuple[str, str], float] = {}
+    head_flat: dict[int, float] = {}
     if not overlay:
-        pair_flat = ahead_flat_by_pair(highs, lows, closes)
+        head_flat = ahead_flat_by_head(highs, lows, closes)
     xs: list[list[float]] = []
     yr: list[int] = []
     ya: list[int] = []
@@ -1415,50 +1561,59 @@ def instrument_samples(
     dts: list[datetime] = []
     agrees: list[bool] = []
     refuses: list[int] = []
-    overlay_bundles: list[list[list[float]]] = []
-    overlay_labeled: list[list[tuple[tuple[str, str], list[float]]]] = []
+    overlay_vecs: list[list[float]] = []
+    overlay_senior: list[int] = []
+    ym: list[float] = []
     start = WARMUP["M1"]
     stop = train_label_stop(n, overlay=overlay)
     if overlay:
         for i in _sample_indices(start, stop, stride):
-            labeled = _bundles_labeled(vecs, align, i)
-            if not labeled:
+            part = _net_input_vec(vecs, align, i, pattern_rows)
+            if part is None:
                 continue
-            overlay_labeled.append(labeled)
-            overlay_bundles.append([part for _pair, part in labeled])
-            xs.append(labeled[0][1])
+            overlay_vecs.append(part)
+            overlay_senior.append(senior[i])
+            xs.append(part)
             yr.append(y_r[i])
             ya.append(0)
             yh.append(0)
-            yhh.append(ahead_head_index(labeled[0][0]))
+            yhh.append(0)
+            ym.append(1.0)
             dts.append(m1_times[i])
             agrees.append(entry_ok(m1_dir[i], m10_dir[i], m30_dir[i], senior[i], extra[i]))
             refuses.append(extra[i])
     else:
         for i in _sample_indices(start, stop, stride):
-            labels = pair_ahead_labels(i, highs, lows, closes, pair_flat, flat_pct)
+            part = _net_input_vec(vecs, align, i, pattern_rows)
+            if part is None:
+                continue
+            labels = head_ahead_labels(i, highs, lows, closes, head_flat, flat_pct)
             if labels is None:
                 continue
             y_act = action_from_aheads(labels)
-            for pair in BUNDLE_PAIRS:
-                senior_tf, junior_tf = pair
-                part = _bundle_chain(vecs, align, i, senior_tf, junior_tf)
-                if part is None or len(part) != IN_DIM:
-                    continue
+            for head in range(N_AHEAD_HEADS):
                 xs.append(part)
                 yr.append(y_r[i])
                 ya.append(y_act)
-                yh.append(labels[pair])
-                yhh.append(ahead_head_index(pair))
+                yh.append(labels[head])
+                yhh.append(head)
+                ym.append(
+                    ahead_move_weight(
+                        i,
+                        highs,
+                        lows,
+                        closes,
+                        ahead_horizon_m1(head),
+                        head_flat.get(head, flat_pct),
+                    )
+                )
                 dts.append(m1_times[i])
                 agrees.append(entry_ok(m1_dir[i], m10_dir[i], m30_dir[i], senior[i], extra[i]))
                 refuses.append(extra[i])
     if not xs:
         return None
     last_i = n - 1
-    live_labeled = _bundles_labeled(vecs, align, last_i)
-    live_bundles = [part for _pair, part in live_labeled]
-    live_chunk = live_bundles[0] if live_bundles else None
+    live_chunk = _net_input_vec(vecs, align, last_i, pattern_rows)
     return {
         "sec": sec,
         "class_code": class_code,
@@ -1468,12 +1623,10 @@ def instrument_samples(
         "y_ahead": np.asarray(yh, dtype=np.int64),
         "y_ahead_head": np.asarray(yhh, dtype=np.int64),
         "dts": dts,
-        "overlay_bundles": overlay_bundles,
-        "overlay_labeled": overlay_labeled,
-        "live_bundles": live_bundles,
-        "live_labeled": live_labeled,
+        "overlay_vecs": overlay_vecs,
+        "overlay_bundles": overlay_vecs,
         "flat_pct": flat_pct,
-        "ahead_flat": pair_flat,
+        "ahead_flat": head_flat,
         "min_pct": 0.0,
         "n_legs": 0,
         "live": np.asarray(live_chunk, dtype=np.float32) if live_chunk is not None else None,
@@ -1483,9 +1636,12 @@ def instrument_samples(
             m1_dir[last_i], m10_dir[last_i], m30_dir[last_i], senior[last_i], extra[last_i]
         ),
         "live_regime": regime_from_dirs(senior[last_i], m1_dir[last_i]),
+        "live_senior_dir": senior[last_i],
         "live_refuse": extra[last_i],
         "agree": np.asarray(agrees, dtype=bool),
         "refuse": np.asarray(refuses, dtype=np.int8),
+        "senior_dir": np.asarray(overlay_senior, dtype=np.int8) if overlay else None,
+        "y_move": np.asarray(ym, dtype=np.float32),
         "tf_dts": {tf: _overlay_tf_dts(book, tf) for tf, book in books.items()},
     }
 
@@ -1497,7 +1653,7 @@ def softmax(logits: np.ndarray) -> np.ndarray:
 
 
 class MLP:
-    """Trunk + regime + three ahead readouts. No action head."""
+    """Trunk + regime + ahead readouts. No action head."""
 
     def __init__(self, in_dim: int = IN_DIM, hidden: tuple[int, ...] = HIDDEN, rng=None):
         rng = np.random.default_rng(rng)
@@ -1535,7 +1691,7 @@ class MLP:
         return r_log, self._ahead_logits(h2), cache
 
     def predict_proba(self, x: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """pr (n,3), dummy pa (n,5) all-none, phs (n, 3 heads, 3 classes). Action is not Wa."""
+        """pr (n,3), dummy pa (n,5) all-none, phs (n, heads, 3 classes). Action is not Wa."""
         r_log, h_logs, _ = self.forward(x)
         phs = np.stack([softmax(h) for h in h_logs], axis=1)
         pa = np.zeros((x.shape[0], len(ACTION_NAMES)), dtype=np.float32)
@@ -1551,7 +1707,7 @@ class MLP:
         v += grad
         setattr(self, name, param - lr * v)
 
-    def step(self, x, y_r, y_h, y_hi, w_r, w_h, lr: float) -> float:
+    def step(self, x, y_r, y_h, y_hi, w_r, w_h, lr: float, w_move=None) -> float:
         r_log, h_logs, cache = self.forward(x)
         pr = softmax(r_log)
         n = x.shape[0]
@@ -1562,6 +1718,10 @@ class MLP:
         yh[np.arange(n), y_h] = 1.0
         wr = w_r[y_r][:, None]
         wh = w_h[y_h][:, None]
+        if w_move is None:
+            wm_row = np.ones(n, dtype=np.float32)
+        else:
+            wm_row = np.asarray(w_move, dtype=np.float32).reshape(-1)
         dr = ((pr - yr) * wr) / n
         loss_r = float(-np.mean(wr[:, 0] * np.log(np.clip(np.sum(pr * yr, axis=1), 1e-8, 1.0))))
         h2 = cache["h2"]
@@ -1572,9 +1732,10 @@ class MLP:
             mask = y_hi == k
             dhk = np.zeros_like(ph)
             if mask.any():
-                dhk[mask] = ((ph[mask] - yh[mask]) * wh[mask]) / n
+                wm = wh[mask] * wm_row[mask][:, None]
+                dhk[mask] = ((ph[mask] - yh[mask]) * wm) / n
                 nll = np.log(np.clip(np.sum(ph * yh, axis=1), 1e-8, 1.0))
-                loss_h_sum += float(-np.sum(wh[mask, 0] * nll[mask]))
+                loss_h_sum += float(-np.sum(wm[:, 0] * nll[mask]))
             d_h2 = d_h2 + dhk @ getattr(self, f"Wh{k}").T
             self._sgd(f"Wh{k}", h2.T @ dhk, lr)
             self._sgd(f"bh{k}", dhk.sum(axis=0), lr)
@@ -1632,16 +1793,28 @@ def fit_mlp(
     *,
     y_hi: np.ndarray | None = None,
     yva_hi: np.ndarray | None = None,
+    y_w: np.ndarray | None = None,
     epochs: int = EPOCHS,
     batch: int = BATCH,
     lr: float = LR,
     rng=None,
+    init: MLP | None = None,
+    mean: np.ndarray | None = None,
+    std: np.ndarray | None = None,
+    freeze_stats: bool = False,
+    min_epochs: int = MIN_EPOCHS,
+    patience: int = PATIENCE,
 ) -> tuple[MLP, dict, np.ndarray, np.ndarray]:
-    mean = Xtr.mean(axis=0)
-    std = np.maximum(Xtr.std(axis=0), 1e-6)
+    if mean is None or std is None or not freeze_stats:
+        mean = Xtr.mean(axis=0)
+        std = np.maximum(Xtr.std(axis=0), 1e-6)
     Ztr = (Xtr - mean) / std
     if y_hi is None:
         y_hi = np.zeros(len(y_h), dtype=np.int64)
+    if y_w is None:
+        y_w = np.ones(len(y_h), dtype=np.float32)
+    else:
+        y_w = np.asarray(y_w, dtype=np.float32).reshape(-1)
     if Xva is None or yva_r is None or len(Xva) == 0:
         Xva, yva_r, yva_a, yva_h, yva_hi = Xtr[-1:], y_r[-1:], y_a[-1:], y_h[-1:], y_hi[-1:]
     if yva_h is None:
@@ -1649,7 +1822,7 @@ def fit_mlp(
     if yva_hi is None:
         yva_hi = y_hi[-1:] if len(y_hi) else np.zeros(len(yva_h), dtype=np.int64)
     Zva = (Xva - mean) / std
-    model = MLP(in_dim=Xtr.shape[1], rng=rng)
+    model = init if init is not None else MLP(in_dim=Xtr.shape[1], rng=rng)
     w_r = _class_weights(y_r, len(REGIME_NAMES))
     w_h = _class_weights(y_h, len(AHEAD_NAMES))
     gen = np.random.default_rng(rng)
@@ -1672,6 +1845,7 @@ def fit_mlp(
                     w_r,
                     w_h,
                     lr * (0.97 ** epoch),
+                    w_move=y_w[idx],
                 )
             )
         pr, _pa, phs = model.predict_proba(Zva)
@@ -1706,7 +1880,7 @@ def fit_mlp(
             wait = 0
         else:
             wait += 1
-            if wait >= PATIENCE:
+            if epoch + 1 >= min_epochs and wait >= patience:
                 print(f"  early stop at epoch {epoch + 1}, keep epoch {best['epoch']}", flush=True)
                 break
     model.restore(best_snap)
@@ -1741,6 +1915,18 @@ def load_net(path: Path | None = None) -> tuple[MLP, np.ndarray, np.ndarray]:
     model = MLP(in_dim=int(data["in_dim"]), hidden=hidden)
     if "Wh0" not in data.files:
         raise RuntimeError("net.npz has a single ahead head; run python -m analyzer --train-net")
+    if "n_ahead_heads" in data.files and int(data["n_ahead_heads"]) != N_AHEAD_HEADS:
+        raise RuntimeError(
+            f"net.npz n_ahead_heads={int(data['n_ahead_heads'])} != {N_AHEAD_HEADS}; "
+            "run python -m analyzer --train-net"
+        )
+    if "meta_bundle" in data.files:
+        raw = data["meta_bundle"]
+        bundle = str(raw.item() if getattr(raw, "shape", None) == () else raw)
+        if bundle != NET_BUNDLE_NAME:
+            raise RuntimeError(
+                f"net.npz bundle={bundle!r} != {NET_BUNDLE_NAME!r}; run python -m analyzer --train-net"
+            )
     for name in _MLP_PARAMS:
         if name not in data.files:
             raise RuntimeError(f"net.npz missing {name}; run python -m analyzer --train-net")
@@ -1764,11 +1950,16 @@ def train_net(
     epochs: int = EPOCHS,
 ) -> dict:
     data_root = data_dir or BARS_DIR
+    dest = dest_dir or NET_DIR
     if sec:
         universe = [(sec, class_code or "TQBR")]
     else:
         universe = list_instruments(data_root, class_code=class_code, tfs=KNOWN_TFS)
     print(f"net train instruments={len(universe)}", flush=True)
+    train_lr = LR
+    train_epochs = epochs
+    min_epochs = MIN_EPOCHS
+    patience = PATIENCE
     items: list[dict] = []
     skipped = 0
     for i, (name, cls) in enumerate(universe, start=1):
@@ -1784,26 +1975,43 @@ def train_net(
             print("    skip: not enough bars", flush=True)
             continue
         flats = sample.get("ahead_flat") or {}
-        f10 = flats.get(("M30", "M10"), sample["flat_pct"])
-        f30 = flats.get(("H4", "M30"), sample["flat_pct"])
-        f240 = flats.get(("D1", "H4"), sample["flat_pct"])
+        f10 = flats.get(1, sample["flat_pct"])
+        f5 = flats.get(2, sample["flat_pct"])
+        f20 = flats.get(0, sample["flat_pct"])
+        f1h = flats.get(3, sample["flat_pct"])
         ya = sample["y_action"]
         print(
             f"    n={len(sample['X'])} buy_in={int((ya == 1).sum())} "
             f"sell_in={int((ya == 2).sum())} need={max_ahead_m1()} "
-            f"flat1={sample['flat_pct']:.3f}% flat10={f10:.3f}% "
-            f"flat30={f30:.3f}% flat240={f240:.3f}%",
+            f"flat1={f1h:.3f}% flat5={f5:.3f}% "
+            f"flat10={f10:.3f}% flat20={f20:.3f}%",
             flush=True,
         )
         items.append(sample)
     if not items:
         return {"error": "no samples", "skipped": skipped}
-    Xtr, Xva, yrtr, yrva, yatr, yava, yhtr, yhva, yhitr, yhiva = [], [], [], [], [], [], [], [], [], []
+    Xtr, Xva, yrtr, yrva, yatr, yava, yhtr, yhva, yhitr, yhiva, ywtr, ywva = (
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+    )
     for it in items:
         tr, va = _split_time(len(it["X"]))
         heads = it.get("y_ahead_head")
         if heads is None:
             heads = np.zeros(len(it["X"]), dtype=np.int64)
+        moves = it.get("y_move")
+        if moves is None:
+            moves = np.ones(len(it["X"]), dtype=np.float32)
         reps = FUT_TRAIN_REPEAT if it.get("class_code") == "SPBFUT" else 1
         for _ in range(reps):
             Xtr.append(it["X"][tr])
@@ -1811,17 +2019,20 @@ def train_net(
             yatr.append(it["y_action"][tr])
             yhtr.append(it["y_ahead"][tr])
             yhitr.append(heads[tr])
+            ywtr.append(moves[tr])
         if len(va):
             Xva.append(it["X"][va])
             yrva.append(it["y_regime"][va])
             yava.append(it["y_action"][va])
             yhva.append(it["y_ahead"][va])
             yhiva.append(heads[va])
+            ywva.append(moves[va])
     Xtr = np.concatenate(Xtr, axis=0)
     y_r = np.concatenate(yrtr)
     y_a = np.concatenate(yatr)
     y_h = np.concatenate(yhtr)
     y_hi = np.concatenate(yhitr)
+    y_w = np.concatenate(ywtr)
     Xva_a = np.concatenate(Xva, axis=0) if Xva else Xtr[-1:]
     yva_r = np.concatenate(yrva) if yrva else y_r[-1:]
     yva_a = np.concatenate(yava) if yava else y_a[-1:]
@@ -1839,33 +2050,45 @@ def train_net(
         yva_h,
         y_hi=y_hi,
         yva_hi=yva_hi,
-        epochs=epochs,
+        y_w=y_w,
+        epochs=train_epochs,
+        lr=train_lr,
         rng=7,
+        min_epochs=min_epochs,
+        patience=patience,
     )
-    dest = dest_dir or NET_DIR
-    path = weights_path(dest)
-    save_net(
-        path,
-        model,
-        mean,
-        std,
-        {
-            "n": int(len(Xtr) + len(Xva_a)),
-            "instruments": len(items),
-            "chain": CHAIN_BARS,
-            "stride": STRIDE,
-            "ahead_heads": N_AHEAD_HEADS,
-            "ahead_m30m10": ahead_horizon_m1(("M30", "M10")),
-            "ahead_h4m30": ahead_horizon_m1(("H4", "M30")),
-            "ahead_d1h4": ahead_horizon_m1(("D1", "H4")),
-            "action_from_aheads": 1,
-            "ahead_need": max_ahead_m1(),
-            "no_wa": 1,
-        },
-    )
-    print(f"saved {path}", flush=True)
+    paths = net_save_paths(sec, class_code, dest, data_root)
+    meta = {
+        "n": int(len(Xtr) + len(Xva_a)),
+        "instruments": len(items),
+        "chain_m1": NET_CHAIN_BARS["M1"],
+        "chain_m5": NET_CHAIN_BARS["M5"],
+        "chain_m10": NET_CHAIN_BARS["M10"],
+        "chain_m20": NET_CHAIN_BARS["M20"],
+        "chain_packs": NET_CHAIN_PACKS,
+        "stride": STRIDE,
+        "ahead_heads": N_AHEAD_HEADS,
+        "bundle": NET_BUNDLE_NAME,
+        "in_dim": IN_DIM,
+        "pattern_dim": PATTERN_DIM,
+        "pattern_pairs": ",".join(pattern_pair_names()),
+        "chain_pattern": 5,
+        "ahead_1": ahead_horizon_m1(3),
+        "ahead_5": ahead_horizon_m1(2),
+        "ahead_10": ahead_horizon_m1(1),
+        "ahead_20": ahead_horizon_m1(0),
+        "action_from_aheads": 1,
+        "ahead_need": max_ahead_m1(),
+        "no_wa": 1,
+        "per_sec": 1 if sec else 0,
+    }
+    for path in paths:
+        save_net(path, model, mean, std, meta)
+        print(f"saved {path}", flush=True)
+    path = paths[0]
     return {
         "path": str(path),
+        "paths": [str(p) for p in paths],
         "n": int(len(Xtr) + len(Xva_a)),
         "instruments": len(items),
         "skipped": skipped,
@@ -1893,75 +2116,39 @@ def _pred_from_proba(pr: np.ndarray, pa: np.ndarray, ph: np.ndarray) -> dict:
     }
 
 
-def _run_labeled(
+def _run_vec(
     model: MLP,
     mean: np.ndarray,
     std: np.ndarray,
-    labeled: list[tuple[tuple[str, str], list[float] | np.ndarray]],
-) -> tuple[np.ndarray, np.ndarray, dict[tuple[str, str], np.ndarray]] | None:
-    """Forward each present bundle. Ahead stays per pair. Action mix is from ph, not Wa."""
-    prs: list[np.ndarray] = []
-    ph_by_pair: dict[tuple[str, str], np.ndarray] = {}
-    for pair, raw in labeled:
-        x = np.asarray(raw, dtype=np.float32)
-        if x.ndim != 1 or x.shape[0] != IN_DIM:
-            continue
-        pr, _pa, phs = model.predict_proba(((x - mean) / std).astype(np.float32)[None, :])
-        prs.append(pr[0])
-        ph_by_pair[pair] = phs[0, ahead_head_index(pair)]
-    if not prs:
+    raw: list[float] | np.ndarray | None,
+) -> tuple[np.ndarray, np.ndarray, dict[int, np.ndarray]] | None:
+    """One forward of связкаМ1М5М10М20. All ahead heads from this vector."""
+    if raw is None:
         return None
-    mixed = mix_ahead_probs(ph_by_pair)
-    return (
-        np.mean(np.stack(prs, axis=0), axis=0),
-        pa_from_ahead_mix(mixed),
-        ph_by_pair,
-    )
-
-
-def _ph_for_tf(ph_by_pair: dict[tuple[str, str], np.ndarray], tf: str) -> np.ndarray | None:
-    pair = ahead_pair_for_tf(tf)
-    if pair in ph_by_pair:
-        return ph_by_pair[pair]
-    return None
-
-
-def _mix_proba(
-    model: MLP,
-    mean: np.ndarray,
-    std: np.ndarray,
-    vecs: list[list[float]] | list[np.ndarray],
-) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
-    """Average action (and unused MLP regime). Ahead is not mixed — use _run_labeled."""
-    labeled = list(zip(BUNDLE_PAIRS[: len(vecs)], vecs))
-    run = _run_labeled(model, mean, std, labeled)
-    if run is None:
+    x = np.asarray(raw, dtype=np.float32)
+    if x.ndim != 1 or x.shape[0] != IN_DIM:
         return None
-    pr, pa, ph_by = run
-    ph = _ph_for_tf(ph_by, "M1")
-    if ph is None and ph_by:
-        ph = next(iter(ph_by.values()))
-    if ph is None:
-        return None
-    return pr, pa, ph
+    pr, _pa, phs = model.predict_proba(((x - mean) / std).astype(np.float32)[None, :])
+    ph_by_head = {k: phs[0, k] for k in range(N_AHEAD_HEADS)}
+    mixed = mix_ahead_probs(ph_by_head)
+    return pr[0], pa_from_ahead_mix(mixed), ph_by_head
+
+
+def _ph_for_tf(ph_by_head: dict[int, np.ndarray], tf: str) -> np.ndarray | None:
+    return ph_by_head.get(ahead_head_for_tf(tf))
 
 
 def predict_mix(
     model: MLP,
     mean: np.ndarray,
     std: np.ndarray,
-    vecs: list[list[float]] | list[np.ndarray],
+    vec: list[float] | np.ndarray | None,
     *,
-    labeled: list[tuple[tuple[str, str], list[float] | np.ndarray]] | None = None,
     ahead_tf: str = "M1",
 ) -> dict | None:
-    run = _run_labeled(model, mean, std, labeled) if labeled is not None else None
+    run = _run_vec(model, mean, std, vec)
     if run is None:
-        mixed = _mix_proba(model, mean, std, vecs)
-        if mixed is None:
-            return None
-        pr, pa, ph = mixed
-        return _pred_from_proba(pr, pa, ph)
+        return None
     pr, pa, ph_by = run
     ph = _ph_for_tf(ph_by, ahead_tf)
     if ph is None and ph_by:
@@ -1972,7 +2159,7 @@ def predict_mix(
 
 
 def predict_instrument(sec: str, class_code: str = "TQBR", *, data_dir=None, dest_dir=None) -> dict:
-    path = weights_path(dest_dir)
+    path = resolve_live_weights(sec, class_code, dest_dir, data_dir)
     if not path.is_file():
         return {"sec": sec, "error": f"no weights at {path}; run --train-net"}
     sample = instrument_samples(sec, class_code, data_dir=data_dir, overlay=True)
@@ -1980,17 +2167,9 @@ def predict_instrument(sec: str, class_code: str = "TQBR", *, data_dir=None, des
         return {"sec": sec, "error": "not enough bars for a связка window"}
     model, mean, std = load_net(path)
     _require_in_dim(model)
-    live_bundles = sample.get("live_bundles") or ([sample["live"]] if sample.get("live") is not None else [])
-    pred = predict_mix(
-        model,
-        mean,
-        std,
-        live_bundles,
-        labeled=sample.get("live_labeled"),
-        ahead_tf="M1",
-    )
+    pred = predict_mix(model, mean, std, sample["live"], ahead_tf="M1")
     if pred is None:
-        return {"sec": sec, "error": "no pair-bundle at live bar"}
+        return {"sec": sec, "error": "no связкаМ1М5М10М20 at live bar"}
     return {
         "sec": sec,
         "class_code": class_code,
@@ -2009,7 +2188,7 @@ def _pred_row(
     pr: np.ndarray,
     pa: np.ndarray,
 ) -> dict:
-    """Overlay row. Ahead columns = glued three-head mean (same as buy_in/sell_in)."""
+    """Overlay row. Ahead columns = glued ahead-head mean. Point columns filled later per TF."""
     ri = int(pr.argmax())
     mix = pa[:3] if pa is not None and len(pa) >= 3 else None
     ahead = (
@@ -2072,16 +2251,11 @@ def smooth_regime_rows(rows: list[dict], span: int = REGIME_EMA) -> list[dict]:
 
 def _overlay_cache(sample: dict, model: MLP, mean: np.ndarray, std: np.ndarray) -> dict:
     pack = sample.get("y_regime")
-    labeled_rows = sample.get("overlay_labeled") or []
-    bundles = sample.get("overlay_bundles") or []
+    vecs = sample.get("overlay_vecs") or sample.get("overlay_bundles") or []
     runs: list[dict] = []
     for i, dt in enumerate(sample["dts"]):
-        if i < len(labeled_rows) and labeled_rows[i]:
-            labeled = labeled_rows[i]
-        else:
-            vecs = bundles[i] if i < len(bundles) else [sample["X"][i]]
-            labeled = list(zip(BUNDLE_PAIRS[: len(vecs)], vecs))
-        run = _run_labeled(model, mean, std, labeled)
+        raw = vecs[i] if i < len(vecs) else sample["X"][i]
+        run = _run_vec(model, mean, std, raw)
         if run is None:
             continue
         pr_mlp, pa, ph_by = run
@@ -2095,28 +2269,51 @@ def _overlay_cache(sample: dict, model: MLP, mean: np.ndarray, std: np.ndarray) 
                 "pack": int(pack[i]) if pack is not None and i < len(pack) else None,
             }
         )
-    live_labeled = sample.get("live_labeled") or []
-    live_bundles = sample.get("live_bundles") or []
-    live_run = None
-    if live_labeled:
-        live_run = _run_labeled(model, mean, std, live_labeled)
-    elif live_bundles:
-        live_run = _run_labeled(model, mean, std, list(zip(BUNDLE_PAIRS[: len(live_bundles)], live_bundles)))
+    live_run = _run_vec(model, mean, std, sample.get("live"))
     return {"runs": runs, "live": live_run}
 
 
+def _attach_point_fields(
+    row: dict,
+    ph_by: dict[int, np.ndarray] | None,
+    senior_dir: int,
+    regime: int,
+) -> dict:
+    heads = ph_by or {}
+    mix = mix_ahead_probs(heads)
+    for pt_tf in POINT_TFS:
+        ph = heads.get(ahead_head_for_tf(pt_tf))
+        action, buy, sell = point_from_pair_ph(ph, senior_dir, regime, mix=mix)
+        row[f"action_{pt_tf}"] = action
+        row[f"buy_in_{pt_tf}"] = buy
+        row[f"sell_in_{pt_tf}"] = sell
+    return row
+
+
 def _rows_from_overlay_cache(sample: dict, cache: dict, tf: str = "M1") -> list[dict]:
-    """M1 overlay rows. Ahead lines are the three-head mean; `tf` is unused."""
+    """M1 overlay rows. Ahead lines are the ahead-head mean; points are per TF head + veto."""
     _ = tf
     rows: list[dict] = []
+    senior = sample.get("senior_dir")
     for run in cache.get("runs") or []:
         pr = _pack_regime_pr(run["pack"]) if run.get("pack") is not None else run["pr_mlp"]
-        rows.append(_pred_row(run["dt"], pr, run["pa"]))
+        row = _pred_row(run["dt"], pr, run["pa"])
+        idx = int(run["i"])
+        sd = int(senior[idx]) if senior is not None and idx < len(senior) else 0
+        pack = run.get("pack")
+        regime = int(pack) if pack is not None else 0
+        rows.append(_attach_point_fields(row, run.get("ph_by"), sd, regime))
     live = cache.get("live")
     if live is not None:
-        _pr_mlp, pa, _ph_by = live
+        _pr_mlp, pa, ph_by = live
         live_pr = _pack_regime_pr(int(sample.get("live_regime", 0)))
         live_row = _pred_row(sample["live_dt"], live_pr, pa)
+        live_row = _attach_point_fields(
+            live_row,
+            ph_by,
+            int(sample.get("live_senior_dir", 0) or 0),
+            int(sample.get("live_regime", 0) or 0),
+        )
         if rows and rows[-1]["dt"] == live_row["dt"]:
             rows[-1] = live_row
         else:
@@ -2213,6 +2410,59 @@ def slot_closed(dt: datetime, tf: str, clock: datetime) -> bool:
     return dt + timedelta(minutes=PERIOD_MIN.get(tf, 1)) <= clock
 
 
+def _is_blank_ahead_row(row: dict) -> bool:
+    """Old CSV before ahead columns, or a hole: all three mix lines at 0."""
+    if "ahead_flat" not in row and "ahead_up" not in row and "ahead_down" not in row:
+        return False
+    return (
+        float(row.get("ahead_flat") or 0.0)
+        + float(row.get("ahead_up") or 0.0)
+        + float(row.get("ahead_down") or 0.0)
+        < 0.5
+    )
+
+
+def overlay_freeze_rows(
+    old: list[dict],
+    new: list[dict],
+    tf: str,
+    clock: datetime,
+) -> list[dict]:
+    """Freeze closed bars; keep closed CSV history left of the live M1 window.
+
+    Live export only recomputes ~ODDS_MAX_BARS M1 (a few days). If senior
+    chart rows left of that window were dropped, D1/H4 panes look empty.
+    Closed mix left of `new` is kept; only the overlapping window is refreshed.
+    """
+    left: list[dict] = []
+    if new:
+        start = new[0]["dt"]
+        left = [
+            row
+            for row in old
+            if row["dt"] < start
+            and slot_closed(row["dt"], tf, clock)
+            and not _is_blank_ahead_row(row)
+        ]
+        old = [row for row in old if row["dt"] >= start]
+    if old and new and new[0]["dt"] < old[0]["dt"]:
+        cut = old[0]["dt"]
+        grown = [row for row in new if row["dt"] < cut]
+        overlap = [row for row in new if row["dt"] >= cut]
+        return _merge_overlay_prefix(left, grown + freeze_closed_rows(old, overlap, tf, clock))
+    return _merge_overlay_prefix(left, freeze_closed_rows(old, new, tf, clock))
+
+
+def _merge_overlay_prefix(left: list[dict], body: list[dict]) -> list[dict]:
+    if not left:
+        return body
+    seen = {row["dt"] for row in body}
+    out = [row for row in left if row["dt"] not in seen]
+    out.extend(body)
+    out.sort(key=lambda item: item["dt"])
+    return out
+
+
 def freeze_closed_rows(
     old: list[dict],
     new: list[dict],
@@ -2225,13 +2475,25 @@ def freeze_closed_rows(
     seen: set[datetime] = set()
     for row in new:
         prev = old_map.get(row["dt"])
-        if prev is not None and slot_closed(row["dt"], tf, clock):
-            out.append(prev)
+        if (
+            prev is not None
+            and slot_closed(row["dt"], tf, clock)
+            and not _is_blank_ahead_row(prev)
+        ):
+            merged = dict(prev)
+            for key in POINT_CSV_KEYS:
+                if key in row:
+                    merged[key] = row[key]
+            out.append(merged)
         else:
             out.append(row)
         seen.add(row["dt"])
     for row in old:
-        if row["dt"] not in seen and slot_closed(row["dt"], tf, clock):
+        if (
+            row["dt"] not in seen
+            and slot_closed(row["dt"], tf, clock)
+            and not _is_blank_ahead_row(row)
+        ):
             out.append(row)
     out.sort(key=lambda item: item["dt"])
     return out
@@ -2272,7 +2534,7 @@ def export_net(
     tfs: tuple[str, ...] | None = None,
 ) -> dict:
     dest = Path(dest_dir or NET_CSV_DIR)
-    wpath = weights_path()
+    wpath = resolve_live_weights(sec, class_code, dest, data_dir)
     if not wpath.is_file():
         return {"sec": sec, "class_code": class_code, "error": f"no weights at {wpath}; run --train-net"}
     sample = instrument_samples(sec, class_code, data_dir=data_dir, overlay=True)
@@ -2291,8 +2553,11 @@ def export_net(
     tf_dts = sample.get("tf_dts") or {}
     clock = sample.get("live_dt") or datetime.min
     for tf in chosen:
-        rows = m1_rows if tf == "M1" else align_net_rows(m1_rows, tf_dts.get(tf) or [])
-        if tf not in POINT_TFS:
+        if tf in POINT_TFS:
+            rows = apply_point_tf(m1_rows, tf)
+            rows = align_net_rows(rows, tf_dts.get(tf) or [])
+        else:
+            rows = m1_rows if tf == "M1" else align_net_rows(m1_rows, tf_dts.get(tf) or [])
             rows = [strip_action_points(r) for r in rows]
         old: list[dict] = []
         for name in names:
@@ -2300,7 +2565,7 @@ def export_net(
             if prev:
                 old = prev
                 break
-        frozen = freeze_closed_rows(old, rows, tf, clock)
+        frozen = overlay_freeze_rows(old, rows, tf, clock)
         if tf not in POINT_TFS:
             frozen = [strip_action_points(r) for r in frozen]
         written = None
@@ -2389,7 +2654,9 @@ def watch_net(
     sleeper=time.sleep,
     stop=None,
     log=None,
+    only: list[tuple[str, str]] | None = None,
 ) -> int:
+    exporter = export_net
     return watch_marks(
         sec,
         class_code,
@@ -2397,13 +2664,16 @@ def watch_net(
         data_dir=data_dir,
         tfs=tfs or NET_WATCH_TFS,
         poll=poll,
-        exporter=export_net,
+        exporter=exporter,
         sleeper=sleeper,
         stop=stop,
         log=log,
         formatter=format_net,
         label="net",
         export_tfs=lambda _dirty: NET_CHART_TFS,
+        only=only,
+        dirty_budget=NET_DIRTY_BUDGET_SEC,
+        max_exports=NET_MAX_EXPORTS_PER_POLL,
     )
 
 
