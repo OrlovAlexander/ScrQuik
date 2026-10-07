@@ -18,10 +18,20 @@ public sealed class InstrumentRow : INotifyPropertyChanged
     private string _barsStatus = "—";
     private string _marksAgeText = "—";
     private string _marksStatus = "—";
+    private string _lastPriceText = "—";
+    private string _volTodayText = "—";
+    private string _valTodayText = "—";
+    private double _volTodayValue = -1;
+    private double _valTodayValue = -1;
+    private double _lastPriceValue = -1;
 
     public required string Sec { get; init; }
     public required string ClassCode { get; init; }
     public string Key => $"{Sec}:{ClassCode}";
+
+    /// <summary>0 = SPBFUT (always first), 1 = rest.</summary>
+    public int ClassSortKey =>
+        ClassCode.Equals("SPBFUT", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
 
     public string Status
     {
@@ -67,6 +77,57 @@ public sealed class InstrumentRow : INotifyPropertyChanged
     {
         get => _marksStatus;
         set => Set(ref _marksStatus, value);
+    }
+
+    /// <summary>LAST from SecDump (QUIK).</summary>
+    public string LastPriceText
+    {
+        get => _lastPriceText;
+        private set => Set(ref _lastPriceText, value);
+    }
+
+    /// <summary>VOLTODAY from SecDump.</summary>
+    public string VolTodayText
+    {
+        get => _volTodayText;
+        private set => Set(ref _volTodayText, value);
+    }
+
+    /// <summary>VALTODAY from SecDump.</summary>
+    public string ValTodayText
+    {
+        get => _valTodayText;
+        private set => Set(ref _valTodayText, value);
+    }
+
+    /// <summary>Raw VOLTODAY for numeric sort (−1 if missing).</summary>
+    public double VolTodayValue
+    {
+        get => _volTodayValue;
+        private set => Set(ref _volTodayValue, value);
+    }
+
+    /// <summary>Raw VALTODAY for numeric sort (−1 if missing).</summary>
+    public double ValTodayValue
+    {
+        get => _valTodayValue;
+        private set => Set(ref _valTodayValue, value);
+    }
+
+    public double LastPriceValue
+    {
+        get => _lastPriceValue;
+        private set => Set(ref _lastPriceValue, value);
+    }
+
+    public void SetQuote(double? last, double? volToday, double? valToday)
+    {
+        LastPriceText = QuikSecDump.FormatLast(last);
+        VolTodayText = QuikSecDump.FormatVol(volToday);
+        ValTodayText = QuikSecDump.FormatVal(valToday);
+        LastPriceValue = last ?? -1;
+        VolTodayValue = volToday ?? -1;
+        ValTodayValue = valToday ?? -1;
     }
 
     public string LastText

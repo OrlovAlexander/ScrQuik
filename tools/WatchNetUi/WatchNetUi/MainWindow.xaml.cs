@@ -1,5 +1,8 @@
 ﻿using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -14,11 +17,14 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, DateTime?> _prevNet = new(StringComparer.OrdinalIgnoreCase);
     private int _logLines;
     private bool _marksOnceBusy;
+    private string _sortPath = nameof(InstrumentRow.ValTodayValue);
+    private ListSortDirection _sortDir = ListSortDirection.Descending;
 
     public MainWindow()
     {
         InitializeComponent();
         Grid.ItemsSource = _rows;
+        ConfigureLiveSort();
         _supervisor = new WatchNetSupervisor();
         _supervisor.Log += OnWorkerLog;
         _marks = new MarksWatchSupervisor(_supervisor.RepoRoot, _supervisor.PythonExe);
@@ -38,6 +44,63 @@ public partial class MainWindow : Window
                 AppendLog($"уже есть --watch pid={string.Join(",", foreign)} (можно «Метки: стоп»)");
             ReloadInstruments();
         };
+    }
+
+    private void ConfigureLiveSort()
+    {
+        var view = CollectionViewSource.GetDefaultView(_rows);
+        if (view is ICollectionViewLiveShaping live)
+        {
+            live.IsLiveSorting = true;
+            live.LiveSortingProperties.Clear();
+            live.LiveSortingProperties.Add(nameof(InstrumentRow.ClassSortKey));
+            live.LiveSortingProperties.Add(nameof(InstrumentRow.VolTodayValue));
+            live.LiveSortingProperties.Add(nameof(InstrumentRow.ValTodayValue));
+            live.LiveSortingProperties.Add(nameof(InstrumentRow.LastPriceValue));
+        }
+        ApplyGridSort(nameof(InstrumentRow.ValTodayValue), ListSortDirection.Descending, syncHeaders: true);
+    }
+
+    private void ApplyGridSort(string path, ListSortDirection dir, bool syncHeaders)
+    {
+        _sortPath = path;
+        _sortDir = dir;
+        var view = CollectionViewSource.GetDefaultView(_rows);
+        using (view.DeferRefresh())
+        {
+            view.SortDescriptions.Clear();
+            // SPBFUT always first, then numeric/text column (тыс/млн/млрд — по сырому числу).
+            view.SortDescriptions.Add(
+                new SortDescription(nameof(InstrumentRow.ClassSortKey), ListSortDirection.Ascending));
+            if (!string.Equals(path, nameof(InstrumentRow.ClassSortKey), StringComparison.Ordinal))
+                view.SortDescriptions.Add(new SortDescription(path, dir));
+        }
+
+        if (!syncHeaders) return;
+        foreach (var col in Grid.Columns)
+        {
+            if (col.SortMemberPath == path)
+                col.SortDirection = dir;
+            else
+                col.SortDirection = null;
+        }
+    }
+
+    private void Grid_Sorting(object sender, DataGridSortingEventArgs e)
+    {
+        e.Handled = true;
+        var path = e.Column.SortMemberPath;
+        if (string.IsNullOrEmpty(path)) return;
+
+        var dir = ListSortDirection.Ascending;
+        if (e.Column.SortDirection == ListSortDirection.Ascending)
+            dir = ListSortDirection.Descending;
+        else if (path is nameof(InstrumentRow.VolTodayValue)
+                 or nameof(InstrumentRow.ValTodayValue)
+                 or nameof(InstrumentRow.LastPriceValue))
+            dir = ListSortDirection.Descending; // first click on volume/turnover: largest first
+
+        ApplyGridSort(path, dir, syncHeaders: true);
     }
 
     private void ReloadInstruments()
@@ -74,8 +137,13 @@ public partial class MainWindow : Window
         var marksStale = 0;
         var marksMissing = 0;
 
+        QuikSecDump.LoadCached();
+
         foreach (var row in _rows)
         {
+            var quote = QuikSecDump.Find(row.Sec, row.ClassCode);
+            row.SetQuote(quote?.Last, quote?.VolToday, quote?.ValToday);
+
             var net = InstrumentScanner.BestNetWrite(row.Sec, row.ClassCode);
             var barsInfo = BarsHealth.ForInstrument(row.Sec, row.ClassCode, now);
             var bars = barsInfo.M1;

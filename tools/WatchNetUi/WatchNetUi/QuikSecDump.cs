@@ -30,6 +30,74 @@ public static class QuikSecDump
         IReadOnlyList<Row> Rows,
         string Status);
 
+    private static Snapshot? _cache;
+    private static DateTime? _cacheMtime;
+    private static IReadOnlyDictionary<string, Row>? _byKey;
+
+    public static Snapshot LoadCached(string? path = null)
+    {
+        path ??= DefaultPath;
+        DateTime? mtime = null;
+        try
+        {
+            if (File.Exists(path)) mtime = File.GetLastWriteTime(path);
+        }
+        catch { /* ignore */ }
+
+        if (_cache != null && Equals(_cacheMtime, mtime) && _byKey != null)
+            return _cache;
+
+        var snap = Load(path);
+        _cache = snap;
+        _cacheMtime = mtime;
+        _byKey = snap.Rows.ToDictionary(
+            r => Key(r.Sec, r.ClassCode),
+            r => r,
+            StringComparer.OrdinalIgnoreCase);
+        return snap;
+    }
+
+    public static string Key(string sec, string classCode) => $"{sec}:{classCode}";
+
+    public static Row? Find(string sec, string classCode)
+    {
+        LoadCached();
+        if (_byKey != null && _byKey.TryGetValue(Key(sec, classCode), out var row))
+            return row;
+        return null;
+    }
+
+    public static string FormatVol(double? v)
+    {
+        if (v == null) return "—";
+        var ru = CultureInfo.GetCultureInfo("ru-RU");
+        var x = v.Value;
+        if (Math.Abs(x) >= 1_000_000) return (x / 1_000_000).ToString("0.##", ru) + " млн";
+        if (Math.Abs(x) >= 1_000) return (x / 1_000).ToString("0.#", ru) + " тыс";
+        return x.ToString("N0", ru);
+    }
+
+    public static string FormatVal(double? v)
+    {
+        if (v == null) return "—";
+        var ru = CultureInfo.GetCultureInfo("ru-RU");
+        var x = v.Value;
+        if (Math.Abs(x) >= 1_000_000_000) return (x / 1_000_000_000).ToString("0.##", ru) + " млрд";
+        if (Math.Abs(x) >= 1_000_000) return (x / 1_000_000).ToString("0.##", ru) + " млн";
+        if (Math.Abs(x) >= 1_000) return (x / 1_000).ToString("0.#", ru) + " тыс";
+        return x.ToString("N0", ru);
+    }
+
+    public static string FormatLast(double? v)
+    {
+        if (v == null) return "—";
+        var ru = CultureInfo.GetCultureInfo("ru-RU");
+        var abs = Math.Abs(v.Value);
+        if (abs >= 1000) return v.Value.ToString("N2", ru);
+        if (abs >= 1) return v.Value.ToString("0.####", ru);
+        return v.Value.ToString("0.######", ru);
+    }
+
     public static Snapshot Load(string? path = null)
     {
         path ??= DefaultPath;

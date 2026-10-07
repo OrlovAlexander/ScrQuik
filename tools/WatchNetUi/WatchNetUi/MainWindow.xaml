@@ -98,21 +98,26 @@
              IsReadOnly="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="11"
              TextWrapping="Wrap"/>
 
-    <DataGrid x:Name="Grid" ItemsSource="{Binding}">
+    <DataGrid x:Name="Grid" ItemsSource="{Binding}"
+              CanUserSortColumns="True"
+              Sorting="Grid_Sorting">
       <DataGrid.Columns>
-        <DataGridTextColumn Header="Sec" Binding="{Binding Sec}" Width="70"/>
-        <DataGridTextColumn Header="Class" Binding="{Binding ClassCode}" Width="55"/>
-        <DataGridTextColumn Header="Bars M1" Binding="{Binding BarsAgeText}" Width="65"/>
-        <DataGridTextColumn Header="Bars" Binding="{Binding BarsStatus}" Width="90"/>
-        <DataGridTextColumn Header="Marks" Binding="{Binding MarksAgeText}" Width="65"/>
-        <DataGridTextColumn Header="Marks st" Binding="{Binding MarksStatus}" Width="70"/>
-        <DataGridTextColumn Header="Воркер" Binding="{Binding WorkerLabel}" Width="55"/>
-        <DataGridTextColumn Header="Сеть" Binding="{Binding Status}" Width="50"/>
-        <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="55"/>
-        <DataGridTextColumn Header="Net CSV" Binding="{Binding LastText}" Width="70"/>
-        <DataGridTextColumn Header="Возраст net" Binding="{Binding AgeText}" Width="75"/>
-        <DataGridTextColumn Header="До обновления" Binding="{Binding EtaText}" Width="100"/>
-        <DataGridTextColumn Header="Деталь" Binding="{Binding Detail}" Width="*"/>
+        <DataGridTextColumn Header="Sec" Binding="{Binding Sec}" SortMemberPath="Sec" Width="70"/>
+        <DataGridTextColumn Header="Class" Binding="{Binding ClassCode}" SortMemberPath="ClassSortKey" Width="55"/>
+        <DataGridTextColumn Header="Цена" Binding="{Binding LastPriceText}" SortMemberPath="LastPriceValue" Width="70"/>
+        <DataGridTextColumn Header="Объём" Binding="{Binding VolTodayText}" SortMemberPath="VolTodayValue" Width="75"/>
+        <DataGridTextColumn Header="Оборот" Binding="{Binding ValTodayText}" SortMemberPath="ValTodayValue" Width="80"/>
+        <DataGridTextColumn Header="Bars M1" Binding="{Binding BarsAgeText}" SortMemberPath="BarsAgeText" Width="65"/>
+        <DataGridTextColumn Header="Bars" Binding="{Binding BarsStatus}" SortMemberPath="BarsStatus" Width="90"/>
+        <DataGridTextColumn Header="Marks" Binding="{Binding MarksAgeText}" SortMemberPath="MarksAgeText" Width="65"/>
+        <DataGridTextColumn Header="Marks st" Binding="{Binding MarksStatus}" SortMemberPath="MarksStatus" Width="70"/>
+        <DataGridTextColumn Header="Воркер" Binding="{Binding WorkerLabel}" SortMemberPath="WorkerLabel" Width="55"/>
+        <DataGridTextColumn Header="Сеть" Binding="{Binding Status}" SortMemberPath="Status" Width="50"/>
+        <DataGridTextColumn Header="PID" Binding="{Binding Pid}" SortMemberPath="Pid" Width="55"/>
+        <DataGridTextColumn Header="Net CSV" Binding="{Binding LastText}" SortMemberPath="LastText" Width="70"/>
+        <DataGridTextColumn Header="Возраст net" Binding="{Binding AgeText}" SortMemberPath="AgeText" Width="75"/>
+        <DataGridTextColumn Header="До обновления" Binding="{Binding EtaText}" SortMemberPath="EtaText" Width="100"/>
+        <DataGridTextColumn Header="Деталь" Binding="{Binding Detail}" SortMemberPath="Detail" Width="*" CanUserSort="False"/>
       </DataGrid.Columns>
     </DataGrid>
   </DockPanel>

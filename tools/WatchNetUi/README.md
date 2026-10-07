@@ -26,6 +26,8 @@ dotnet run --project tools/WatchNetUi/WatchNetUi/WatchNetUi.csproj -c Release
 
 Полоса также показывает, запущен ли QUIK (`info.exe`). Это **не** замена лога Lua (`RebuildDataFunctors` / stale DS) — только mtime CSV.
 
+Колонки **Цена** / **Объём** / **Оборот** — из `sec_dump.csv` (SecDump: LAST, VOLTODAY, VALTODAY), снимок раз в ~5 мин. Сортировка по объёму/обороту — по сырому числу (суффиксы тыс/млн/млрд только для отображения); класс **SPBFUT** всегда сверху.
+
 ## Инструменты (barsSaver → marks → net)
 
 | кнопка | поведение |
