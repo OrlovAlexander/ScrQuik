@@ -4,17 +4,17 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="WatchNet — монитор"
-        Height="720" Width="1100"
-        MinHeight="480" MinWidth="800"
+        Title="WatchNet / marks / barsSaver"
+        Height="800" Width="1280"
+        MinHeight="520" MinWidth="960"
         Background="#FF1B1E24"
         Foreground="#FFE8EAED"
         FontFamily="Segoe UI"
         Closing="Window_Closing">
   <Window.Resources>
     <Style TargetType="Button">
-      <Setter Property="Padding" Value="12,6"/>
-      <Setter Property="Margin" Value="0,0,8,0"/>
+      <Setter Property="Padding" Value="10,6"/>
+      <Setter Property="Margin" Value="0,0,6,0"/>
       <Setter Property="Background" Value="#FF2D333B"/>
       <Setter Property="Foreground" Value="#FFE8EAED"/>
       <Setter Property="BorderBrush" Value="#FF3D4450"/>
@@ -62,38 +62,56 @@
   </Window.Resources>
 
   <DockPanel Margin="16">
-    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12" LastChildFill="False">
-      <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
-        <Button x:Name="BtnRefresh" Content="Обновить список" Click="BtnRefresh_Click"/>
-        <Button x:Name="BtnStartSelected" Content="Старт выбранных" Click="BtnStartSelected_Click"/>
-        <Button x:Name="BtnStartAll" Content="Старт всех" Click="BtnStartAll_Click"/>
-        <Button x:Name="BtnStopSelected" Content="Стоп выбранных" Click="BtnStopSelected_Click"/>
-        <Button x:Name="BtnStopAll" Content="Стоп всех" Click="BtnStopAll_Click"/>
-      </StackPanel>
+    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="False">
+      <WrapPanel Orientation="Horizontal" DockPanel.Dock="Left">
+        <Button x:Name="BtnRefresh" Content="Обновить" Click="BtnRefresh_Click"/>
+        <Button x:Name="BtnAddInstrument" Content="+ инструмент" Click="BtnAddInstrument_Click"/>
+        <Button x:Name="BtnRemoveInstrument" Content="− удалить выбр." Click="BtnRemoveInstrument_Click"/>
+        <Button x:Name="BtnStartSelected" Content="Сеть: выбранные" Click="BtnStartSelected_Click" Margin="12,0,6,0"/>
+        <Button x:Name="BtnStartAll" Content="Сеть: все" Click="BtnStartAll_Click"/>
+        <Button x:Name="BtnStopSelected" Content="Сеть: стоп выбр." Click="BtnStopSelected_Click"/>
+        <Button x:Name="BtnStopAll" Content="Сеть: стоп все" Click="BtnStopAll_Click"/>
+        <Button x:Name="BtnMarksWatch" Content="Метки: watch" Click="BtnMarksWatch_Click" Margin="12,0,6,0"/>
+        <Button x:Name="BtnMarksStop" Content="Метки: стоп" Click="BtnMarksStop_Click"/>
+        <Button x:Name="BtnMarksOnce" Content="Метки: разово выбр." Click="BtnMarksOnce_Click"/>
+      </WrapPanel>
       <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
-        <TextBlock Text="воркеров:" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="#FFB0B8C4"/>
-        <TextBox x:Name="TxtMaxParallel" Width="48" Text="8" VerticalAlignment="Center"/>
-        <TextBlock x:Name="TxtSummary" Margin="16,0,0,0" VerticalAlignment="Center" Foreground="#FF8AB4F8"/>
+        <TextBlock Text="воркеров сети:" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="#FFB0B8C4"/>
+        <TextBox x:Name="TxtMaxParallel" Width="40" Text="8" VerticalAlignment="Center"/>
+        <TextBlock x:Name="TxtSummary" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="#FF8AB4F8"/>
       </StackPanel>
     </DockPanel>
 
-    <TextBlock DockPanel.Dock="Top" Margin="0,0,0,8" TextWrapping="Wrap" Foreground="#FF8A9099"
-               Text="«Старт всех»: до 8 воркеров делят все тикеры (round-robin, --watch-only), внутри шарда fair-очередь. Больше 8 — thrash: CPU есть, CSV почти не обновляются. Один export_net ≈ 1–2 мин. Не потоки — процессы python+numpy."/>
+    <Border DockPanel.Dock="Top" Margin="0,0,0,6" Padding="10,8" Background="#FF12151A" BorderBrush="#FF3D4450" BorderThickness="1">
+      <StackPanel>
+        <TextBlock x:Name="TxtBarsSummary" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12"
+                   Foreground="#FF8AB4F8" Text="barsSaver: …"/>
+        <TextBlock x:Name="TxtMarksSummary" Margin="0,4,0,0" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12"
+                   Foreground="#FF8AB4F8" Text="marks: …"/>
+      </StackPanel>
+    </Border>
 
-    <TextBox x:Name="TxtLog" DockPanel.Dock="Bottom" Height="140" Margin="0,12,0,0"
+    <TextBlock DockPanel.Dock="Top" Margin="0,0,0,8" TextWrapping="Wrap" Foreground="#FF8A9099"
+               Text="+/− инструмент: sec_list barsSaver (5 ТФ) и при удалении — CSV bars/marks/net (+ npz). После +/− перезапустите barsSaver в QUIK. Метки: watch / разово. Сеть: до 8 воркеров."/>
+
+    <TextBox x:Name="TxtLog" DockPanel.Dock="Bottom" Height="130" Margin="0,12,0,0"
              IsReadOnly="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="11"
              TextWrapping="Wrap"/>
 
     <DataGrid x:Name="Grid" ItemsSource="{Binding}">
       <DataGrid.Columns>
-        <DataGridTextColumn Header="Sec" Binding="{Binding Sec}" Width="90"/>
-        <DataGridTextColumn Header="Class" Binding="{Binding ClassCode}" Width="70"/>
-        <DataGridTextColumn Header="Воркер" Binding="{Binding WorkerLabel}" Width="70"/>
-        <DataGridTextColumn Header="Статус" Binding="{Binding Status}" Width="90"/>
-        <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="70"/>
-        <DataGridTextColumn Header="Последнее обновление" Binding="{Binding LastText}" Width="140"/>
-        <DataGridTextColumn Header="Возраст" Binding="{Binding AgeText}" Width="90"/>
-        <DataGridTextColumn Header="До обновления" Binding="{Binding EtaText}" Width="140"/>
+        <DataGridTextColumn Header="Sec" Binding="{Binding Sec}" Width="70"/>
+        <DataGridTextColumn Header="Class" Binding="{Binding ClassCode}" Width="55"/>
+        <DataGridTextColumn Header="Bars M1" Binding="{Binding BarsAgeText}" Width="65"/>
+        <DataGridTextColumn Header="Bars" Binding="{Binding BarsStatus}" Width="90"/>
+        <DataGridTextColumn Header="Marks" Binding="{Binding MarksAgeText}" Width="65"/>
+        <DataGridTextColumn Header="Marks st" Binding="{Binding MarksStatus}" Width="70"/>
+        <DataGridTextColumn Header="Воркер" Binding="{Binding WorkerLabel}" Width="55"/>
+        <DataGridTextColumn Header="Сеть" Binding="{Binding Status}" Width="50"/>
+        <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="55"/>
+        <DataGridTextColumn Header="Net CSV" Binding="{Binding LastText}" Width="70"/>
+        <DataGridTextColumn Header="Возраст net" Binding="{Binding AgeText}" Width="75"/>
+        <DataGridTextColumn Header="До обновления" Binding="{Binding EtaText}" Width="100"/>
         <DataGridTextColumn Header="Деталь" Binding="{Binding Detail}" Width="*"/>
       </DataGrid.Columns>
     </DataGrid>

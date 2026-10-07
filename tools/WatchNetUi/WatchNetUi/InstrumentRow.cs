@@ -14,6 +14,10 @@ public sealed class InstrumentRow : INotifyPropertyChanged
     private int? _pid;
     private bool _isRunning;
     private string _detail = "";
+    private string _barsAgeText = "—";
+    private string _barsStatus = "—";
+    private string _marksAgeText = "—";
+    private string _marksStatus = "—";
 
     public required string Sec { get; init; }
     public required string ClassCode { get; init; }
@@ -39,6 +43,30 @@ public sealed class InstrumentRow : INotifyPropertyChanged
     {
         get => _barsM1Write;
         set => Set(ref _barsM1Write, value);
+    }
+
+    public string BarsAgeText
+    {
+        get => _barsAgeText;
+        set => Set(ref _barsAgeText, value);
+    }
+
+    public string BarsStatus
+    {
+        get => _barsStatus;
+        set => Set(ref _barsStatus, value);
+    }
+
+    public string MarksAgeText
+    {
+        get => _marksAgeText;
+        set => Set(ref _marksAgeText, value);
+    }
+
+    public string MarksStatus
+    {
+        get => _marksStatus;
+        set => Set(ref _marksStatus, value);
     }
 
     public string LastText

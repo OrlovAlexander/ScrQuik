@@ -2,7 +2,7 @@
 -- CSV: LuaIndicators\analyzer_net\{SEC}_{CLASS}_{TF}.csv
 -- Add as a NEW pane (not on price).
 -- Impulse / pullback / regime flat / uncertain / rail 100 are not drawn.
--- Dashed ahead_up / ahead_down / ahead_flat = mean of ahead heads.
+-- Dashed ahead_flat = mean of ahead heads (ahead_up / ahead_down not drawn).
 -- Do not stretch mix past the last CSV bar (live edge without rows stays empty).
 -- buy_in / sell_in at 33 = M10 ahead head after mix agreement and impulse veto.
 -- Re-add after lua replace.
@@ -20,15 +20,11 @@ local palette = isDark and {
     rail      = RGB(90, 90, 90),
     buy_in    = RGB(80, 255, 160),
     sell_in   = RGB(255, 90, 90),
-    ahead_up  = RGB(40, 190, 255),
-    ahead_down= RGB(255, 90, 160),
     ahead_flat= RGB(190, 170, 255),
 } or {
     rail      = RGB(160, 160, 160),
     buy_in    = RGB(0, 140, 70),
     sell_in   = RGB(210, 30, 30),
-    ahead_up  = RGB(0, 120, 190),
-    ahead_down= RGB(190, 40, 110),
     ahead_flat= RGB(120, 80, 180),
 }
 
@@ -44,8 +40,6 @@ _G.Settings = {
         { Name = "0",         Color = palette.rail,      Type = TYPE_DASH,      Width = 1 },
         { Name = "buy_in",    Color = palette.buy_in,    Type = TYPE_POINT,     Width = 4 },
         { Name = "sell_in",   Color = palette.sell_in,   Type = TYPE_POINT,     Width = 4 },
-        { Name = "ahead_up",  Color = palette.ahead_up,  Type = TYPE_DASH,      Width = 2 },
-        { Name = "ahead_down",Color = palette.ahead_down,Type = TYPE_DASH,      Width = 2 },
         { Name = "ahead_flat",Color = palette.ahead_flat,Type = TYPE_DASH,      Width = 2 }
     }
 }
@@ -201,16 +195,16 @@ local function keyStamp(dt)
     return y .. m .. d .. h .. mi
 end
 
-local function aheadOnBar(index, row, lastDt, lastUp, lastDown, lastFlat)
+local function aheadFlatOnBar(index, row, lastDt, lastFlat)
     if row ~= nil then
-        return row.ahead_up, row.ahead_down, row.ahead_flat
+        return row.ahead_flat
     end
     local lastStamp = keyStamp(lastDt)
     local stamp = keyStamp(barKey(index))
     if lastStamp ~= nil and stamp ~= nil and stamp <= lastStamp then
-        return lastUp, lastDown, lastFlat
+        return lastFlat
     end
-    return nil, nil, nil
+    return nil
 end
 
 peekLastLine = function(path)
@@ -340,23 +334,21 @@ local function paintAll(byKey, lastDt)
         return
     end
     local n = _G.Size()
-    local lastAheadUp, lastAheadDown, lastAheadFlat = nil, nil, nil
+    local lastAheadFlat = nil
     for i = 1, n do
         local row = rowFor(i, byKey)
         if row ~= nil then
-            lastAheadUp, lastAheadDown, lastAheadFlat = row.ahead_up, row.ahead_down, row.ahead_flat
+            lastAheadFlat = row.ahead_flat
         end
         local buy_in, sell_in = nil, nil
         if row ~= nil then
             buy_in, sell_in = actionPoint(row)
         end
-        local up, down, flat = aheadOnBar(i, row, lastDt, lastAheadUp, lastAheadDown, lastAheadFlat)
+        local flat = aheadFlatOnBar(i, row, lastDt, lastAheadFlat)
         SetValue(i, 1, 0)
         SetValue(i, 2, buy_in)
         SetValue(i, 3, sell_in)
-        SetValue(i, 4, up)
-        SetValue(i, 5, down)
-        SetValue(i, 6, flat)
+        SetValue(i, 4, flat)
     end
 end
 
@@ -366,7 +358,7 @@ local function Algo()
     local loadedTail = ""
     local lastCheck = 0
     local prevSize = 0
-    local lastAheadUp, lastAheadDown, lastAheadFlat = nil, nil, nil
+    local lastAheadFlat = nil
 
     local function refresh()
         local path = netPath()
@@ -387,10 +379,10 @@ local function Algo()
                 warnedTf = true
                 message("*AnalyzerNet: M1, M10, M30, H4 or D1", 1)
             end
-            return nil, nil, nil, nil, nil, nil
+            return nil, nil, nil, nil
         end
         if index == 1 or loadedLast == "" then
-            lastAheadUp, lastAheadDown, lastAheadFlat = nil, nil, nil
+            lastAheadFlat = nil
             refresh()
             paintAll(byKey, loadedLast)
             prevSize = _G.Size and _G.Size() or 0
@@ -417,23 +409,21 @@ local function Algo()
         end
         local row = rowFor(index, byKey)
         if row ~= nil then
-            lastAheadUp, lastAheadDown, lastAheadFlat = row.ahead_up, row.ahead_down, row.ahead_flat
+            lastAheadFlat = row.ahead_flat
         end
         local buy_in, sell_in = nil, nil
         if row ~= nil then
             buy_in, sell_in = actionPoint(row)
         end
-        local up, down, flat = aheadOnBar(
-            index, row, loadedLast, lastAheadUp, lastAheadDown, lastAheadFlat
-        )
-        return 0, buy_in, sell_in, up, down, flat
+        local flat = aheadFlatOnBar(index, row, loadedLast, lastAheadFlat)
+        return 0, buy_in, sell_in, flat
     end
 end
 
 function _G.Init()
     warnedTf = false
     PlotLines = Algo()
-    return 6
+    return 4
 end
 
 function _G.OnChangeSettings()

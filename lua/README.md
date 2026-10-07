@@ -21,6 +21,12 @@ Ini в репозитории (`config/`) читает Python-анализато
 | `AnalyzerZigZag.lua` | `*AnalyzerZigZag` | зигзаг `--waves`; код оставлен, оверлей не развивать |
 | `AnalyzerOdds.lua` | `*AnalyzerOdds` | эволюционировал в `*AnalyzerNet` |
 
+## Скрипты (не индикаторы)
+
+| файл | назначение |
+|---|---|
+| `SecDump.lua` | дамп TQBR/SPBFUT/крипто + LAST/VALTODAY/шаг/экспирация → `barsSaver\sec_dump.csv` (+ `sec_dump_classes.csv`). Копировать в `LuaScripts\`, Сервисы → Lua-скрипты |
+
 ## Прочее
 
 | файл | назначение |

@@ -68,9 +68,13 @@ C:\QuikFinam\LuaScripts\barsSaver\
 
 Имя файла фьючерса без точки в коде обрезается (`CRZ6` → `CR`) — так устроен апстрим, не наша правка.
 
+## Справочник QUIK для UI
+
+Скрипт [`lua/SecDump.lua`](../lua/SecDump.lua) (Сервисы → Lua-скрипты) пишет `sec_dump.csv` рядом с `data\` — TQBR, SPBFUT и крипто-классы; колонки: код, имя, шаг цены, LAST, VALTODAY, VOLTODAY, дата/время экспирации (фьючерсы). Рядом `sec_dump_classes.csv`. WatchNetUi — таблица с сортировкой в «+ инструмент».
+
 ## Как добавить инструмент
 
-Пять строк в `sec_list.txt`:
+Пять строк в `sec_list.txt` (или кнопка «+» в WatchNetUi):
 
 ```text
 { sec_code = "SBER", class_code = "TQBR", interval = 1 },

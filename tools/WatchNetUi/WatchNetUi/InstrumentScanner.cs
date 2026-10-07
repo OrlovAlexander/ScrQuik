@@ -7,6 +7,7 @@ public static class Paths
 {
     public static readonly string BarsDir = @"C:\QuikFinam\LuaScripts\barsSaver\data";
     public static readonly string NetDir = @"C:\QuikFinam\LuaIndicators\analyzer_net";
+    public static readonly string MarksDir = @"C:\QuikFinam\LuaIndicators\analyzer_marks";
 
     public static string FindRepoRoot()
     {
@@ -90,6 +91,21 @@ public static class InstrumentScanner
         foreach (var tf in new[] { "M1", "M10", "M30", "H4", "D1" })
         {
             var t = FileWriteUtc(NetCsvPath(sec, classCode, tf, netDir));
+            if (t == null) continue;
+            if (best == null || t > best) best = t;
+        }
+        return best;
+    }
+
+    public static string MarksCsvPath(string sec, string classCode, string tf = "M1", string? marksDir = null)
+        => Path.Combine(marksDir ?? Paths.MarksDir, $"{sec}_{classCode}_{tf}.csv");
+
+    public static DateTime? BestMarksWrite(string sec, string classCode, string? marksDir = null)
+    {
+        DateTime? best = null;
+        foreach (var tf in new[] { "M1", "M10", "M30", "H4", "D1" })
+        {
+            var t = FileWriteUtc(MarksCsvPath(sec, classCode, tf, marksDir));
             if (t == null) continue;
             if (best == null || t > best) best = t;
         }

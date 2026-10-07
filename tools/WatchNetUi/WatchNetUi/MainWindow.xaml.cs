@@ -1,5 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace WatchNetUi;
@@ -8,9 +9,11 @@ public partial class MainWindow : Window
 {
     private readonly ObservableCollection<InstrumentRow> _rows = new();
     private readonly WatchNetSupervisor _supervisor;
+    private readonly MarksWatchSupervisor _marks;
     private readonly DispatcherTimer _timer;
     private readonly Dictionary<string, DateTime?> _prevNet = new(StringComparer.OrdinalIgnoreCase);
     private int _logLines;
+    private bool _marksOnceBusy;
 
     public MainWindow()
     {
@@ -18,6 +21,8 @@ public partial class MainWindow : Window
         Grid.ItemsSource = _rows;
         _supervisor = new WatchNetSupervisor();
         _supervisor.Log += OnWorkerLog;
+        _marks = new MarksWatchSupervisor(_supervisor.RepoRoot, _supervisor.PythonExe);
+        _marks.Log += msg => Dispatcher.BeginInvoke(() => AppendLog("marks  " + msg));
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += (_, _) => RefreshStatuses();
@@ -27,7 +32,10 @@ public partial class MainWindow : Window
         {
             AppendLog($"repo={_supervisor.RepoRoot}");
             AppendLog($"python={_supervisor.PythonExe}");
-            AppendLog($"лимит воркеров={WatchNetSupervisor.JobsCap} (больше — thrash, CSV почти не двигаются)");
+            AppendLog($"лимит воркеров сети={WatchNetSupervisor.JobsCap}");
+            var foreign = MarksWatchSupervisor.FindForeignMarksWatchPids();
+            if (foreign.Count > 0)
+                AppendLog($"уже есть --watch pid={string.Join(",", foreign)} (можно «Метки: стоп»)");
             ReloadInstruments();
         };
     }
@@ -54,11 +62,53 @@ public partial class MainWindow : Window
     {
         var now = DateTime.Now;
         var covered = 0;
+        var snap = BarsHealth.Build(_rows.Select(r => (r.Sec, r.ClassCode)), now);
+        TxtBarsSummary.Text = snap.Summary;
+        TxtBarsSummary.Foreground = snap is { QuikRunning: true, BarsDirOk: true, StaleM1: 0, BehindM10: 0 }
+            ? Brushes.LightGreen
+            : snap.BehindM10 > 0 || snap.StaleM1 > 0 || !snap.QuikRunning
+                ? Brushes.Orange
+                : Brushes.LightSkyBlue;
+
+        var marksFresh = 0;
+        var marksStale = 0;
+        var marksMissing = 0;
+
         foreach (var row in _rows)
         {
             var net = InstrumentScanner.BestNetWrite(row.Sec, row.ClassCode);
-            var bars = InstrumentScanner.FileWriteUtc(InstrumentScanner.BarsM1Path(row.Sec, row.ClassCode));
+            var barsInfo = BarsHealth.ForInstrument(row.Sec, row.ClassCode, now);
+            var bars = barsInfo.M1;
             row.BarsM1Write = bars;
+            row.BarsAgeText = barsInfo.AgeText;
+            row.BarsStatus = barsInfo.Status;
+
+            var marks = InstrumentScanner.BestMarksWrite(row.Sec, row.ClassCode);
+            if (marks == null)
+            {
+                row.MarksAgeText = "—";
+                row.MarksStatus = "нет";
+                marksMissing++;
+            }
+            else
+            {
+                var mage = now - marks.Value;
+                row.MarksAgeText = FormatSpan(mage);
+                if (mage.TotalMinutes < 3)
+                {
+                    row.MarksStatus = "ok";
+                    marksFresh++;
+                }
+                else if (mage.TotalMinutes < 15)
+                {
+                    row.MarksStatus = "тихо";
+                }
+                else
+                {
+                    row.MarksStatus = "stale";
+                    marksStale++;
+                }
+            }
 
             if (_prevNet.TryGetValue(row.Key, out var prev) && net != null && prev != null && net > prev)
             {
@@ -139,7 +189,6 @@ public partial class MainWindow : Window
             }
             else
             {
-                // In a shard of K with 1 export ~80s, full round ≈ K * cycle.
                 var unit = Math.Max(30, row.CycleSeconds);
                 var cycle = isRun && shardSize > 1 ? unit * shardSize : unit;
                 var due = net.Value.AddSeconds(cycle);
@@ -161,8 +210,17 @@ public partial class MainWindow : Window
             }
         }
 
+        var marksPid = _marks.Pid;
+        var foreign = MarksWatchSupervisor.FindForeignMarksWatchPids();
+        var marksRun = _marks.IsRunning || foreign.Count > 0;
+        var shownPid = marksPid ?? (foreign.Count > 0 ? foreign[0] : (int?)null);
+        TxtMarksSummary.Text = marksRun
+            ? $"marks: watch pid={shownPid} · CSV свежих(<3м) {marksFresh}/{_rows.Count} · stale {marksStale} · нет {marksMissing}"
+            : $"marks: watch стоп · CSV свежих(<3м) {marksFresh}/{_rows.Count} · stale {marksStale} · нет {marksMissing}";
+        TxtMarksSummary.Foreground = marksRun ? Brushes.LightGreen : Brushes.Orange;
+
         TxtSummary.Text =
-            $"покрыто {covered}/{_rows.Count}  ·  воркеров {_supervisor.WorkerCount}/{WatchNetSupervisor.JobsCap}  ·  {now:HH:mm:ss}";
+            $"сеть {covered}/{_rows.Count} · w {_supervisor.WorkerCount}/{WatchNetSupervisor.JobsCap} · {now:HH:mm:ss}";
     }
 
     private static string FormatSpan(TimeSpan t)
@@ -186,6 +244,70 @@ public partial class MainWindow : Window
 
     private void BtnRefresh_Click(object sender, RoutedEventArgs e) => ReloadInstruments();
 
+    private void BtnAddInstrument_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new AddInstrumentWindow { Owner = this };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            var report = InstrumentLifecycle.AddToSecList(dlg.SecCode, dlg.ClassCode);
+            AppendLog($"add {report.Sec}:{report.ClassCode}  {report.Note}");
+            MessageBox.Show(
+                this,
+                report.Note,
+                "Инструмент в sec_list",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            ReloadInstruments();
+        }
+        catch (Exception ex)
+        {
+            AppendLog("add failed: " + ex.Message);
+            MessageBox.Show(this, ex.Message, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void BtnRemoveInstrument_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = Grid.SelectedItems.Cast<InstrumentRow>().ToList();
+        if (selected.Count == 0)
+        {
+            AppendLog("выберите строки для удаления");
+            return;
+        }
+
+        var names = string.Join(", ", selected.Select(r => r.Key).Take(12));
+        if (selected.Count > 12) names += "…";
+        var ask = MessageBox.Show(
+            this,
+            $"Удалить {selected.Count} инструмент(ов) из sec_list и стереть CSV bars/marks/net?\n\n{names}\n\n"
+            + "Сеть по ним будет остановлена. barsSaver в QUIK нужно перезапустить.",
+            "Удалить инструменты",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (ask != MessageBoxResult.Yes) return;
+
+        foreach (var row in selected)
+        {
+            try
+            {
+                _supervisor.StopInstrument(row.Key);
+                var report = InstrumentLifecycle.RemoveEverywhere(row.Sec, row.ClassCode);
+                AppendLog($"remove {report.Sec}:{report.ClassCode}  {report.Note}");
+                foreach (var f in report.DeletedFiles.Take(8))
+                    AppendLog("  del " + f);
+                if (report.DeletedFiles.Count > 8)
+                    AppendLog($"  … ещё {report.DeletedFiles.Count - 8} файлов");
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"remove {row.Key} failed: {ex.Message}");
+            }
+        }
+
+        ReloadInstruments();
+    }
+
     private void BtnStartSelected_Click(object sender, RoutedEventArgs e)
     {
         var selected = Grid.SelectedItems.Cast<InstrumentRow>().ToList();
@@ -199,16 +321,15 @@ public partial class MainWindow : Window
         if (requested != jobs)
             AppendLog($"запрошено {requested} → обрезано до {jobs} (иначе thrash, CSV стоят)");
         var list = selected.Select(r => (r.Sec, r.ClassCode)).ToList();
-        // Selected few → dedicated; many → shard pool over selection only.
         if (selected.Count <= jobs)
         {
             var n = _supervisor.StartDedicated(list, jobs);
-            AppendLog($"старт выделенных: {n} (лимит воркеров {jobs})");
+            AppendLog($"сеть старт выделенных: {n} (лимит {jobs})");
         }
         else
         {
             var n = _supervisor.StartPool(list, jobs);
-            AppendLog($"старт пула по выбранным: {n} воркеров на {list.Count} тикеров");
+            AppendLog($"сеть пул по выбранным: {n} воркеров на {list.Count}");
         }
         RefreshStatuses();
     }
@@ -217,7 +338,7 @@ public partial class MainWindow : Window
     {
         var jobs = ReadJobs(out var requested);
         if (requested != jobs)
-            AppendLog($"запрошено {requested} → обрезано до {jobs} (иначе thrash, CSV стоят)");
+            AppendLog($"запрошено {requested} → обрезано до {jobs}");
         var list = _rows.Select(r => (r.Sec, r.ClassCode)).ToList();
         if (list.Count == 0)
         {
@@ -227,7 +348,7 @@ public partial class MainWindow : Window
 
         var n = _supervisor.StartPool(list, jobs);
         var per = (list.Count + n - 1) / n;
-        AppendLog($"пул: {n} воркеров × ~{per} тикеров (все {list.Count}). Fair-очередь внутри шарда. 1 export ≈ 1–2 мин.");
+        AppendLog($"сеть пул: {n} × ~{per} тикеров (все {list.Count})");
         RefreshStatuses();
     }
 
@@ -241,7 +362,7 @@ public partial class MainWindow : Window
         }
         foreach (var wid in workers)
             _supervisor.StopWorker(wid);
-        AppendLog($"остановлено воркеров: {workers.Count}");
+        AppendLog($"сеть остановлено воркеров: {workers.Count}");
         RefreshStatuses();
     }
 
@@ -255,13 +376,75 @@ public partial class MainWindow : Window
             row.Status = "стоп";
             row.WorkerLabel = "—";
         }
-        AppendLog("все остановлены");
+        AppendLog("сеть: все остановлены");
         RefreshStatuses();
+    }
+
+    private void BtnMarksWatch_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_marks.IsRunning)
+            {
+                AppendLog($"marks watch уже pid={_marks.Pid}");
+                return;
+            }
+            _marks.StartWatch();
+            RefreshStatuses();
+        }
+        catch (Exception ex)
+        {
+            AppendLog("marks watch failed: " + ex.Message);
+        }
+    }
+
+    private void BtnMarksStop_Click(object sender, RoutedEventArgs e)
+    {
+        _marks.CancelOneShot();
+        _marks.StopWatch();
+        RefreshStatuses();
+    }
+
+    private async void BtnMarksOnce_Click(object sender, RoutedEventArgs e)
+    {
+        if (_marksOnceBusy)
+        {
+            AppendLog("marks разово уже идёт");
+            return;
+        }
+
+        var selected = Grid.SelectedItems.Cast<InstrumentRow>().ToList();
+        if (selected.Count == 0)
+        {
+            AppendLog("выберите строки для разового --marks");
+            return;
+        }
+
+        _marksOnceBusy = true;
+        BtnMarksOnce.IsEnabled = false;
+        try
+        {
+            var list = selected.Select(r => (r.Sec, r.ClassCode)).ToList();
+            await _marks.ExportSelectedAsync(list).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            AppendLog("marks разово отменено");
+        }
+        catch (Exception ex)
+        {
+            AppendLog("marks разово failed: " + ex.Message);
+        }
+        finally
+        {
+            _marksOnceBusy = false;
+            BtnMarksOnce.IsEnabled = true;
+            RefreshStatuses();
+        }
     }
 
     private void OnWorkerLog(string key, string message)
     {
-        // BeginInvoke: sync Invoke from 20 stdout readers can stall the pipe and freeze exports.
         Dispatcher.BeginInvoke(() => AppendLog($"{key}  {message}"));
     }
 
@@ -280,6 +463,7 @@ public partial class MainWindow : Window
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         _timer.Stop();
+        _marks.Dispose();
         _supervisor.Dispose();
     }
 }

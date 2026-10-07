@@ -64,7 +64,7 @@
 | `python -m analyzer --watch-net-pool --jobs 4` | явно 4 процесса, тикеры по round-robin |
 | `python -m analyzer --watch-net-pool --jobs 0` | по процессу на каждый тикер; на 52 инструментах обычно MemoryError (лимит 8 на `jobs>0` не действует только у `0`) |
 | `tools\watch-net-pool.cmd` | то же, что `--watch-net-pool` (аргументы после `.cmd` пробрасываются) |
-| `dotnet run --project tools/WatchNetUi/WatchNetUi/WatchNetUi.csproj -c Release` | WPF-монитор пула: **Старт всех** = до 8 шардов `--watch-only` на все тикеры; возраст/ETA/«считает сейчас». Не запускать вместе с `--watch-net-pool`. См. [tools/WatchNetUi/README.md](../tools/WatchNetUi/README.md) |
+| `dotnet run --project tools/WatchNetUi/WatchNetUi/WatchNetUi.csproj -c Release` | WPF-монитор: +/− инструмент (`sec_list` + CSV bars/marks/net), barsSaver-статус, метки (`--watch` / `--marks`), пул сети (до 8). См. [tools/WatchNetUi/README.md](../tools/WatchNetUi/README.md) |
 
 Порядок: сначала `--train-net` (общий или `--sec`), потом `--net` / `--watch-net`. После смены связки или входа веса переучить: старый `net.npz` с другой связкой не загрузится. `--watch-net-pool` веса не трогает, только запускает живые `--watch-net`.
 
